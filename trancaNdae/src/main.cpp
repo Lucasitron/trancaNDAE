@@ -5,12 +5,13 @@
 #include <Keypad.h>
 
 // ================= Módulos do Projeto =================
-#include "pins.h"            // Todas as definições de pinos
-#include "secrets.h"         // Credenciais (Wi-Fi, Firebase, OTA, IP fixo)
-#include "wifi_manager.h"    // Wi-Fi, IP fixo e OTA
-#include "firebase_client.h" // Firebase + NVS do token
+#include "pins.h"
+#include "secrets.h"
+#include "wifi_manager.h"
+#include "firebase_client.h"
+#include "simulation.h"
 
-// ================= Configurações do Teclado =================
+// ================= Configurações do Teclado (3x4) =================
 const byte ROWS = 4;
 const byte COLS = 3;
 char keys[ROWS][COLS] = {
@@ -28,22 +29,60 @@ LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 // ================= Estado da Validação =================
 String pinDigitado = "";
 const int PIN_MAX_LENGTH = 16;
-const char *PALAVRA_ESPERADA = "ABRIR"; // Palavra-comando que o PC cifrou
+const char *PALAVRA_ESPERADA = "ABRIR";
+
+// ================= Variáveis de Estado do Display =================
+String linhaStatus = "Sistema Iniciado";
+String linhaMensagem = "Aguardando...";
+String linhaTeclado = "";
+String linhaRodape = "Aguardando comando";
 
 // ================= Funções Auxiliares =================
-void mostrarNoLCD(const String &linha1, const String &linha2 = "")
+void limparLinha(uint8_t linha)
 {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(linha1);
-    if (linha2.length() > 0)
-    {
-        lcd.setCursor(0, 1);
-        lcd.print(linha2);
-    }
+    lcd.setCursor(0, linha);
+    for (uint8_t i = 0; i < LCD_COLUMNS; i++)
+        lcd.print(" ");
 }
 
-// Calcula HMAC-SHA256 (versão recomendada para validar a chave)
+String centralizar(const String &texto)
+{
+    if (texto.length() >= LCD_COLUMNS)
+        return texto.substring(0, LCD_COLUMNS);
+    int espacos = (LCD_COLUMNS - texto.length()) / 2;
+    String resultado = "";
+    for (int i = 0; i < espacos; i++)
+        resultado += " ";
+    resultado += texto;
+    return resultado;
+}
+
+void atualizarDisplay()
+{
+    lcd.setCursor(0, 0);
+    lcd.print(centralizar(linhaStatus));
+    limparLinha(1);
+    lcd.setCursor(0, 1);
+    lcd.print(linhaMensagem);
+    limparLinha(2);
+    lcd.setCursor(0, 2);
+    lcd.print(linhaTeclado);
+    limparLinha(3);
+    lcd.setCursor(0, 3);
+    lcd.print(linhaRodape);
+}
+
+void mostrarNoLCD(const String &status, const String &mensagem,
+                  const String &teclado = "", const String &rodape = "")
+{
+    linhaStatus = status;
+    linhaMensagem = mensagem;
+    linhaTeclado = teclado;
+    linhaRodape = rodape;
+    atualizarDisplay();
+}
+
+// ================= HMAC-SHA256 =================
 #include <mbedtls/md.h>
 String hmacSha256(const String &mensagem, const String &chave)
 {
@@ -72,40 +111,33 @@ void validarChave(const String &chave)
 
     if (token.length() == 0)
     {
-        mostrarNoLCD("Sem comando", "pendente");
+        mostrarNoLCD("Sem comando", "Nenhum comando pendente", "", "Aguarde o PC enviar");
         tone(PINO_BUZZER, 400, 300);
+        delay(1500);
+        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
         return;
     }
 
-    // --- OPÇÃO RECOMENDADA: HMAC ---
     String hashCalculado = hmacSha256(PALAVRA_ESPERADA, chave);
     bool valido = (hashCalculado == token);
 
-    // --- OPÇÃO ALTERNATIVA: XOR (sua ideia original) ---
-    // (requer Base64 decode antes — descomente se preferir)
-    // String decifrado = xorCipher(base64Decode(token), chave);
-    // bool valido = (decifrado == PALAVRA_ESPERADA);
-
     if (valido)
     {
-        mostrarNoLCD("OK! Acionando...", "Rele alternado");
+        mostrarNoLCD(">>> SUCESSO <<<", "Rele alternado", "", "Comando consumido");
         tone(PINO_BUZZER, 1500, 200);
 
-        // Comuta o relé
         digitalWrite(PINO_RELE, !digitalRead(PINO_RELE));
-
-        // 🔒 Anti-replay: consome o token (só pode ser usado uma vez)
-        limpar_token_nvs();
+        limpar_token_nvs(); // Anti-replay
 
         delay(2000);
-        mostrarNoLCD("Aguardando...", "Comando remoto");
+        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
     }
     else
     {
-        mostrarNoLCD("Chave invalida", "Tente novamente");
+        mostrarNoLCD("!! INVALIDO !!", "Chave incorreta", "", "Tente novamente");
         tone(PINO_BUZZER, 400, 300);
         delay(1500);
-        mostrarNoLCD("Digite a chave:", "");
+        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
     }
 }
 
@@ -116,46 +148,44 @@ void setup()
     delay(500);
     Serial.println("\n=== Iniciando Sistema ===");
 
-    // 1. Configuração dos pinos
+    // 1. Pinos
     pinMode(PINO_RELE, OUTPUT);
-    digitalWrite(PINO_RELE, LOW); // Relé começa desligado
+    digitalWrite(PINO_RELE, LOW);
     pinMode(PINO_BUZZER, OUTPUT);
     digitalWrite(PINO_BUZZER, LOW);
 
-    // 2. LCD
+    // 2. Simulação (no-op se WOKWI_SIM não estiver definido)
+    simulation_setup();
+
+    // 3. LCD
     lcd.init();
     lcd.backlight();
-    mostrarNoLCD("Sistema Iniciado", "Aguardando...");
+    mostrarNoLCD("Sistema Iniciado", "Bem-vindo!", "", "Versao 1.0");
     tone(PINO_BUZZER, 1000, 200);
-    delay(300);
+    delay(800);
 
-    // 3. Registra callback de eventos Wi-Fi (antes de conectar)
+    // 4. Wi-Fi
     WiFi.onEvent(eventoWiFi);
-
-    // 4. Conecta ao Wi-Fi (com IP fixo, se USE_STATIC_IP=true no secrets.h)
     conectarWiFi();
 
-    // 5. Inicia OTA (só se Wi-Fi conectou)
+    // 5. OTA + Firebase
     if (wifiConectado)
     {
         iniciarOTA();
-
-        // 6. Inicia Firebase (streaming do nó de comandos)
         iniciarFirebase();
-
-        mostrarNoLCD("WiFi OK", "Aguardando cmd");
+        mostrarNoLCD("WiFi OK", "Sistema Online", "", "Aguardando comando");
     }
     else
     {
-        mostrarNoLCD("WiFi OFF", "Verifique config");
+        mostrarNoLCD("WiFi OFF", "Sem conexao", "", "Verifique config");
     }
 
-    // 7. Recupera token pendente (caso tenha reiniciado antes de usar)
+    // 6. Recupera token pendente da NVS
     String tokenPendente = ler_token_nvs();
     if (tokenPendente.length() > 0)
     {
-        Serial.println("♻️ Token pendente na NVS: " + tokenPendente);
-        mostrarNoLCD("Comando pendente", "Digite a chave:");
+        Serial.println("Token pendente na NVS: " + tokenPendente);
+        mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
     }
 
     Serial.println("=== Sistema pronto ===\n");
@@ -164,13 +194,14 @@ void setup()
 // ================= LOOP =================
 void loop()
 {
-    // 1. Processa OTA (não-bloqueante)
+    // 1. OTA + Firebase
     processarOTA();
-
-    // 2. Processa Firebase (streaming assíncrono)
     processarFirebase();
 
-    // 3. Verifica se há novo token recebido via stream
+    // 2. Simulação (no-op em produção)
+    simulation_loop();
+
+    // 3. Verifica novo token recebido via stream
     static unsigned long ultimoCheckToken = 0;
     if (millis() - ultimoCheckToken > 2000)
     {
@@ -180,12 +211,12 @@ void loop()
         if (tokenAtual != tokenAnterior && tokenAtual.length() > 0)
         {
             tokenAnterior = tokenAtual;
-            mostrarNoLCD("Comando pendente", "Digite a chave:");
+            mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
             tone(PINO_BUZZER, 1500, 150);
         }
     }
 
-    // 4. Leitura do teclado
+    // 4. Teclado
     char tecla = teclado.getKey();
     if (tecla)
     {
@@ -194,29 +225,25 @@ void loop()
 
         if (tecla == '#')
         {
-            // Confirma a chave
             validarChave(pinDigitado);
             pinDigitado = "";
         }
         else if (tecla == '*')
         {
-            // Cancela / limpa
             pinDigitado = "";
-            mostrarNoLCD("Digite a chave:", "");
+            linhaTeclado = "";
+            atualizarDisplay();
         }
         else
         {
-            // Adiciona dígito (mostra como asteriscos)
             if (pinDigitado.length() < PIN_MAX_LENGTH)
             {
                 pinDigitado += tecla;
                 String mascara = "";
                 for (unsigned int i = 0; i < pinDigitado.length(); i++)
                     mascara += '*';
-                lcd.setCursor(0, 1);
-                lcd.print("                "); // limpa linha
-                lcd.setCursor(0, 1);
-                lcd.print(mascara);
+                linhaTeclado = mascara;
+                atualizarDisplay();
             }
         }
     }

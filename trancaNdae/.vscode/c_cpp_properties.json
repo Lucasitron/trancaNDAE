@@ -8,9 +8,7 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/connect",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/ArduinoOTA/src",
-                "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/firebase",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/NetworkClientSecure/src",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/SSLClient/src",
@@ -23,7 +21,6 @@
                 "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/LiquidCrystal_I2C",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/WiFiManager",
-                "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/nvs",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/FS/src",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Update/src",
@@ -34,7 +31,6 @@
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Network/src",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                 "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/include",
-                "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/include/trancaNdae",
                 "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/src",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32-libs/esp32/include/newlib/platform_include",
                 "/home/lucasitron/.platformio/packages/framework-arduinoespressif32-libs/esp32/include/freertos/config/include",
@@ -383,9 +379,7 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/connect",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/ArduinoOTA/src",
-                    "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/firebase",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/NetworkClientSecure/src",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/SSLClient/src",
@@ -398,7 +392,6 @@
                     "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/LiquidCrystal_I2C",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/.pio/libdeps/esp32dev/WiFiManager",
-                    "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/lib/nvs",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/FS/src",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Update/src",
@@ -409,7 +402,6 @@
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/Network/src",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                     "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/include",
-                    "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/include/trancaNdae",
                     "/home/lucasitron/Documentos/05-dev/trancaNDAE/trancaNdae/src",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32-libs/esp32/include/newlib/platform_include",
                     "/home/lucasitron/.platformio/packages/framework-arduinoespressif32-libs/esp32/include/freertos/config/include",
