@@ -3,3 +3,7 @@ build/
 
 
 secrets.h
+
+# Simulation files (branch-specific)
+diagram.json
+wokwi.toml
