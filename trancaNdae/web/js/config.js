@@ -2,7 +2,7 @@
 // Preencha com os mesmos valores de include/secrets.h.
 // apiKey de projeto web é pública por design (proteção real está nas Rules + Auth).
 export const firebaseConfig = {
-  apiKey: "PywQ3HVcqCvRjdt8sDtXW9VL6V7gVQ1H78XhVgO7",
+  apiKey: "AIzaSyByBylcrbdPD6el0C2UbBeAdFvtFzWhFr4",
   authDomain: "trancandae-cd59b.firebaseapp.com",
   databaseURL: "https://trancandae-cd59b-default-rtdb.firebaseio.com",
   projectId: "trancandae-cd59b",
