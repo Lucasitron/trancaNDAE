@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "comandos": {
+      "$device": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "senhas": {
+      "$device": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
