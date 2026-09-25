@@ -36,6 +36,8 @@ Callback unificado para eventos, erros, debug e dados. Quando uma **string** che
 
 ## Formato Esperado no Firebase
 
+### Comando único legado
+
 O PC deve publicar uma **string** no nó `/comandos/dispositivo1`:
 
 ```json
@@ -45,6 +47,32 @@ O PC deve publicar uma **string** no nó `/comandos/dispositivo1`:
   }
 }
 ```
+
+### Gerenciador de senhas (Casa do Estudante)
+
+A página `web/` mantém duas chaves por dispositivo. O ESP32 lê **somente**
+`lista` (uma string CSV, sem JSON — a lib não tem parser e a RAM é limitada):
+
+```json
+{
+  "senhas": {
+    "dispositivo1": {
+      "lista": "tok1hex32,tok2hex32",
+      "itens": {
+        "-Oa1b2c": { "nome": "Maria Q12", "token": "tok1hex32", "ativa": true, "expiraEm": 0, "criadaEm": 1758760000000 }
+      }
+    }
+  }
+}
+```
+
+- `lista`: só tokens de senhas **ativas e não expiradas** (máx. 20, ver
+  `include/senhas_store.h: MAX_SENHAS`). Bloquear/excluir/expirar = sumir da
+  lista = slot liberado no ESP32. Não há blocklist que cresce.
+- `itens`: metadados só para a web (o ESP32 ignora).
+- Lista vazia/nula = zero chaves (fail-closed). Expiração é aplicada pela web
+  ao recompor `lista`; sem NTP no ESP32, um token expirado ainda vale offline
+  até a próxima sincronização.
 
 ## Dependências
 
