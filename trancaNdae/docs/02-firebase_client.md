@@ -57,9 +57,9 @@ A página `web/` mantém duas chaves por dispositivo. O ESP32 lê **somente**
 {
   "senhas": {
     "dispositivo1": {
-      "lista": "tok1hex32,tok2hex32",
+      "lista": "a3f5,9c2e",
       "itens": {
-        "-Oa1b2c": { "nome": "Maria Q12", "token": "tok1hex32", "ativa": true, "expiraEm": 0, "criadaEm": 1758760000000 }
+        "-Oa1b2c": { "nome": "Maria Q12", "token": "a3f5", "ativa": true, "expiraEm": 0, "criadaEm": 1758760000000 }
       }
     }
   }
@@ -69,6 +69,8 @@ A página `web/` mantém duas chaves por dispositivo. O ESP32 lê **somente**
 - `lista`: só tokens de senhas **ativas e não expiradas** (máx. 20, ver
   `include/senhas_store.h: MAX_SENHAS`). Bloquear/excluir/expirar = sumir da
   lista = slot liberado no ESP32. Não há blocklist que cresce.
+  String `""` = revogação total deliberada; evento `null` (nó ausente,
+  ex. reconnect) **não** apaga o cache — evita lockout por transitório.
 - `itens`: metadados só para a web (o ESP32 ignora).
 - Lista vazia/nula = zero chaves (fail-closed). Expiração é aplicada pela web
   ao recompor `lista`; sem NTP no ESP32, um token expirado ainda vale offline

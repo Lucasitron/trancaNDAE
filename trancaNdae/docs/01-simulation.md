@@ -15,7 +15,7 @@ Inicializa o botão TEST (`INPUT_PULLUP`) e o LED de status. Chamada no `setup()
 
 ### `void simulation_loop()`
 Processa:
-1. **Botão TEST** → gera token HMAC de `"ABRIR"` com chave `"12345678"` e salva na NVS.
+1. **Botão TEST** → gera token HMAC de `"ABRIR"` com chave `"1234"` e salva na NVS.
 2. **LED de status** → espelha o estado do relé.
 
 ## Pinos (definidos em `pins.h`)
@@ -56,11 +56,11 @@ void loop() {
 | Parâmetro | Valor |
 | :--- | :--- |
 | Palavra-comando | `ABRIR` |
-| PIN de teste | `12345678` |
-| Token gerado | `HMAC-SHA256("ABRIR", "12345678")` |
+| PIN de teste | `1234` |
+| Token gerado | `HMAC-SHA256("ABRIR", "1234")` (4 hex) |
 
 Para alterar, edite a linha em `simulation.cpp`:
 
 ```cpp
-String tokenTeste = hmacSha256("ABRIR", "12345678");
+String tokenTeste = hmacSha256("ABRIR", "1234");
 ```

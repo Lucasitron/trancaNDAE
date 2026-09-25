@@ -22,7 +22,7 @@ import {
   remove,
   set,
 } from "firebase/database";
-import { firebaseConfig, MAX_SENHAS, caminhoItens, caminhoLista } from "../config.js";
+import { firebaseConfig, MAX_SENHAS, PIN_LEN, caminhoItens, caminhoLista } from "../config.js";
 import { gerarToken, validarPin } from "./TokenModel.js";
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
@@ -62,7 +62,7 @@ export async function publicarLista(device) {
   return tokens.length;
 }
 
-export function gerarPinAleatorio(n = 6) {
+export function gerarPinAleatorio(n = PIN_LEN) {
   const buf = new Uint32Array(n);
   crypto.getRandomValues(buf);
   return [...buf].map((v) => String(v % 10)).join("");

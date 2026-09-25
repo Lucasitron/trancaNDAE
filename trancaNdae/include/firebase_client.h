@@ -10,7 +10,7 @@
 #include "secrets.h"
 
 
-// Nó com a lista compacta de chaves (CSV de tokens HMAC, 32 hex).
+// Nó com a lista compacta de chaves (CSV de tokens HMAC, 4 hex).
 // Gerenciado pela página web (web/js/models/SenhasModel.js).
 #define SENHAS_LISTA_PATH "/senhas/dispositivo1/lista"
 

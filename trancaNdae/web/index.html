@@ -52,10 +52,10 @@
           <input id="nome" type="text" maxlength="40" required placeholder="Ex.: Maria — Q12" />
         </div>
         <div>
-          <label for="pin">PIN (4–16 dígitos)</label>
+          <label for="pin">PIN (4 dígitos — a tranca valida sozinha ao completar)</label>
           <div class="linha">
             <input id="pin" type="text" inputmode="numeric" autocomplete="off" required
-                   minlength="4" maxlength="16" pattern="[0-9*#]{4,16}" placeholder="Ex.: 482916" />
+                   minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="Ex.: 4829" />
             <button id="btn-gerar-pin" type="button" class="secundario">Gerar</button>
           </div>
         </div>
@@ -89,7 +89,7 @@
     <details>
       <summary>Como funciona</summary>
       <ol>
-        <li>Ao criar, o navegador calcula <code>HMAC-SHA256("ABRIR", PIN)</code> (32 hex, igual ao firmware) e grava em <code>senhas/{dispositivo}/itens</code>, depois recompõe <code>senhas/{dispositivo}/lista</code> (CSV só com ativas e não expiradas, máx. 20).</li>
+        <li>Ao criar, o navegador calcula <code>HMAC-SHA256("ABRIR", PIN)</code> (4 hex, igual ao firmware) e grava em <code>senhas/{dispositivo}/itens</code>, depois recompõe <code>senhas/{dispositivo}/lista</code> (CSV só com ativas e não expiradas, máx. 20).</li>
         <li>O ESP32 faz stream só da <code>lista</code> (uma string, sem JSON) e guarda em RAM+NVS limitadas. Bloquear/excluir/expirar = sumir da lista = slot liberado. Não há blocklist que cresce.</li>
         <li>O morador digita o PIN no teclado; o ESP32 recalcula o HMAC e abre se estiver na tabela. Lista vazia = tudo bloqueado (fail-closed).</li>
       </ol>

@@ -29,7 +29,7 @@ LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 // ================= Estado da Validação =================
 String pinDigitado = "";
-const int PIN_MAX_LENGTH = 16;
+const int PIN_MAX_LENGTH = PIN_LEN; // senhas de 4 dígitos (senhas_store.h)
 const char *PALAVRA_ESPERADA = "ABRIR";
 
 // ================= Variáveis de Estado do Display =================
@@ -83,7 +83,10 @@ void mostrarNoLCD(const String &status, const String &mensagem,
     atualizarDisplay();
 }
 
-// ================= HMAC-SHA256 =================
+// ================= HMAC-SHA256 (truncado) =================
+// Calcula o HMAC-SHA256 completo mas retorna só os primeiros
+// TOKEN_HEX_LEN/2 bytes em hex (TOKEN_HEX_LEN=4 -> 2 bytes -> "a3f5").
+// Deve ser idêntico ao gerarToken() da web (web/js/models/TokenModel.js).
 #include <mbedtls/md.h>
 String hmacSha256(const String &mensagem, const String &chave)
 {
@@ -98,10 +101,10 @@ String hmacSha256(const String &mensagem, const String &chave)
     mbedtls_md_hmac_finish(&ctx, hash);
     mbedtls_md_free(&ctx);
 
-    char hex[65];
-    for (int i = 0; i < 32; i++)
+    char hex[TOKEN_HEX_LEN + 1];
+    for (int i = 0; i < TOKEN_HEX_LEN / 2; i++)
         sprintf(hex + (i * 2), "%02x", hash[i]);
-    hex[64] = '\0';
+    hex[TOKEN_HEX_LEN] = '\0';
     return String(hex);
 }
 
@@ -200,8 +203,13 @@ void setup()
         mostrarNoLCD("WiFi OFF", "Sem conexao", "", "Verifique config");
     }
 
-    // 6. Recupera token pendente da NVS
+    // 6. Recupera token pendente da NVS (migração: descarta formato antigo)
     String tokenPendente = ler_token_nvs();
+    if (tokenPendente.length() > 0 && tokenPendente.length() != TOKEN_HEX_LEN)
+    {
+        limpar_token_nvs(); // token do formato antigo (32/64 hex) — inválido agora
+        tokenPendente = "";
+    }
     if (tokenPendente.length() > 0)
     {
         tlogln("Token pendente na NVS: " + tokenPendente);
@@ -283,6 +291,11 @@ void loop()
                     mascara += '*';
                 linhaTeclado = mascara;
                 atualizarDisplay();
+                if (pinDigitado.length() >= PIN_MAX_LENGTH)
+                {
+                    validarChave(pinDigitado); // PIN de 4 dígitos: valida sozinho
+                    pinDigitado = "";
+                }
             }
         }
     }

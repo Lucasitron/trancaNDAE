@@ -10,7 +10,7 @@ static bool s_mudou = false;
 
 static Preferences s_prefs;
 
-static bool eh_hex32(const char *s)
+static bool eh_hex(const char *s)
 {
     for (int i = 0; i < TOKEN_HEX_LEN; i++)
     {
@@ -32,7 +32,7 @@ static void persistir()
         snprintf(key, sizeof(key), "t%02d", i);
         if (i < s_total)
             s_prefs.putString(key, s_tokens[i]);
-        else
+        else if (s_prefs.isKey(key))
             s_prefs.remove(key); // libera slots órfãos (bloqueadas/excluídas)
     }
     s_prefs.end();
@@ -56,7 +56,7 @@ void senhas_init()
         if (t.length() == TOKEN_HEX_LEN)
         {
             t.toCharArray(s_tokens[validos], TOKEN_HEX_LEN + 1);
-            if (eh_hex32(s_tokens[validos]))
+            if (eh_hex(s_tokens[validos]))
                 validos++;
         }
     }
@@ -67,7 +67,7 @@ void senhas_init()
 
 bool senhas_sync_csv(const String &csv)
 {
-    // Defesa: CSV maior que o máximo teórico (20*32 + 19 vírgulas) é descartado.
+    // Defesa: CSV maior que o máximo teórico (20*(4+1)) é descartado.
     if (csv.length() > (size_t)(MAX_SENHAS * (TOKEN_HEX_LEN + 1)))
     {
         tlogln("⚠️ CSV de senhas excede o limite. Ignorado.");
@@ -87,7 +87,7 @@ bool senhas_sync_csv(const String &csv)
         {
             char buf[TOKEN_HEX_LEN + 1];
             pedaco.toCharArray(buf, sizeof(buf));
-            if (eh_hex32(buf))
+            if (eh_hex(buf))
             {
                 // Deduplica
                 bool repetido = false;

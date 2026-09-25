@@ -31,8 +31,8 @@ void simulation_loop()
 
     if (ultimoEstadoBotao == HIGH && estadoAtual == LOW) // borda de descida
     {
-        // Gera o HMAC de "ABRIR" com a chave de teste "12345678"
-        String tokenTeste = hmacSha256("ABRIR", "12345678");
+        // Gera o HMAC de "ABRIR" com a chave de teste "1234" (PIN_LEN dígitos)
+        String tokenTeste = hmacSha256("ABRIR", "1234");
         salvar_token_nvs(tokenTeste);
 
         Serial.println("[WOKWI] Token de teste gravado: " + tokenTeste);

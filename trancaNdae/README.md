@@ -154,7 +154,7 @@ O projeto inclui uma **branch `simulation`** dedicada ao Wokwi. Ela contém:
 - `main.ino` com teclado 4x4 (teclas A/B/C/D mapeadas)
 - Flag `-D WOKWI_SIM` no `platformio.ini`
 
-**Chave de teste:** `12345678` (usada pelo botão TEST para gerar o HMAC).
+**Chave de teste:** `1234` (usada pelo botão TEST para gerar o HMAC).
 
 ---
 
