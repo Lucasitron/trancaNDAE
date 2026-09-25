@@ -1,0 +1,209 @@
+{
+    "version": 1,
+    "author": "Tranca ESP32",
+    "editor": "wokwi",
+    "parts": [
+        {
+            "type": "board-esp32-devkit-c-v4",
+            "id": "esp",
+            "top": 0,
+            "left": 0,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-lcd2004",
+            "id": "lcd1",
+            "top": -220,
+            "left": 380,
+            "attrs": {
+                "pins": "i2c"
+            }
+        },
+        {
+            "type": "wokwi-membrane-keypad",
+            "id": "keypad1",
+            "top": 220,
+            "left": 380,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-buzzer",
+            "id": "bz1",
+            "top": -130,
+            "left": -180,
+            "attrs": {
+                "volume": "0.1"
+            }
+        },
+        {
+            "type": "wokwi-relay-module",
+            "id": "relay1",
+            "top": 130,
+            "left": -230,
+            "attrs": {}
+        },
+        {
+            "type": "wokwi-pushbutton",
+            "id": "btn1",
+            "top": 250,
+            "left": -180,
+            "attrs": {
+                "color": "green",
+                "label": "TEST"
+            }
+        },
+        {
+            "type": "wokwi-led",
+            "id": "led1",
+            "top": 130,
+            "left": -380,
+            "attrs": {
+                "color": "red"
+            }
+        },
+        {
+            "type": "wokwi-resistor",
+            "id": "r1",
+            "top": 180,
+            "left": -380,
+            "attrs": {
+                "resistance": "220"
+            }
+        }
+    ],
+    "connections": [
+        [
+            "esp:21",
+            "lcd1:SDA",
+            "green",
+            []
+        ],
+        [
+            "esp:22",
+            "lcd1:SCL",
+            "blue",
+            []
+        ],
+        [
+            "esp:3V3",
+            "lcd1:VCC",
+            "red",
+            []
+        ],
+        [
+            "esp:GND.1",
+            "lcd1:GND",
+            "black",
+            []
+        ],
+        [
+            "esp:13",
+            "keypad1:R1",
+            "green",
+            []
+        ],
+        [
+            "esp:12",
+            "keypad1:R2",
+            "green",
+            []
+        ],
+        [
+            "esp:14",
+            "keypad1:R3",
+            "green",
+            []
+        ],
+        [
+            "esp:27",
+            "keypad1:R4",
+            "green",
+            []
+        ],
+        [
+            "esp:26",
+            "keypad1:C1",
+            "purple",
+            []
+        ],
+        [
+            "esp:25",
+            "keypad1:C2",
+            "purple",
+            []
+        ],
+        [
+            "esp:33",
+            "keypad1:C3",
+            "purple",
+            []
+        ],
+        [
+            "esp:32",
+            "keypad1:C4",
+            "purple",
+            []
+        ],
+        [
+            "esp:4",
+            "bz1:1",
+            "orange",
+            []
+        ],
+        [
+            "esp:GND.2",
+            "bz1:2",
+            "black",
+            []
+        ],
+        [
+            "esp:15",
+            "relay1:IN",
+            "orange",
+            []
+        ],
+        [
+            "esp:5V",
+            "relay1:VCC",
+            "red",
+            []
+        ],
+        [
+            "esp:GND.2",
+            "relay1:GND",
+            "black",
+            []
+        ],
+        [
+            "esp:5",
+            "btn1:1.l",
+            "orange",
+            []
+        ],
+        [
+            "btn1:2.l",
+            "esp:GND.2",
+            "black",
+            []
+        ],
+        [
+            "esp:2",
+            "r1:1",
+            "orange",
+            []
+        ],
+        [
+            "r1:2",
+            "led1:A",
+            "red",
+            []
+        ],
+        [
+            "led1:C",
+            "esp:GND.1",
+            "black",
+            []
+        ]
+    ],
+    "dependencies": {}
+}
