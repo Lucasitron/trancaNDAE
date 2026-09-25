@@ -18,7 +18,7 @@ export class SenhasController {
 
     this.view.onLogin((email, pass) => this.doLogin(email, pass));
     this.view.onLogout(() => logout().catch((e) => this.view.erro(e)));
-    this.view.onGerarPin(() => gerarPinAleatorio(6));
+    this.view.onGerarPin(() => gerarPinAleatorio(4));
     this.view.onCriar((dados) => this.criar(dados));
     this.view.onAcao((acao, id, ativa) => this.acao(acao, id, ativa));
     this.view.onLimparExpiradas(() => this.limpar());

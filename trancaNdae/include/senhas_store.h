@@ -1,8 +1,10 @@
 // senhas_store.h — Tabela limitada de chaves autorizadas (RAM + NVS).
 //
 // Desenho anti-estouro de memória:
-// - Capacidade fixa: MAX_SENHAS (20) tokens de 32 hex em RAM estática,
-//   sem alocação dinâmica e sem String acumulada.
+// - Capacidade fixa: MAX_SENHAS (20) tokens de 4 hex em RAM estática
+//   (20 x 5 bytes = 100 bytes), sem alocação dinâmica e sem String acumulada.
+// - O token é o HMAC-SHA256("ABRIR", PIN) truncado nos 2 primeiros bytes
+//   (4 hex). PIN de 4 dígitos (PIN_LEN).
 // - A revogação (bloquear/excluir/expirar) é representada por AUSÊNCIA
 //   do token na lista do Firebase. Não existe blocklist que cresce:
 //   bloquear = remover da lista = slot liberado.
@@ -13,7 +15,8 @@
 #include <Arduino.h>
 
 #define MAX_SENHAS 20
-#define TOKEN_HEX_LEN 32
+#define TOKEN_HEX_LEN 4
+#define PIN_LEN 4
 
 // Carrega a tabela da NVS para a RAM. Chame no setup().
 void senhas_init();

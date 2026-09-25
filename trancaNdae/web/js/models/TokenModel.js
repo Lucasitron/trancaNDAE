@@ -2,15 +2,15 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getDatabase, ref, set } from "firebase/database";
-import { firebaseConfig, PALAVRA_COMANDO } from "../config.js";
+import { firebaseConfig, PALAVRA_COMANDO, TOKEN_HEX_LEN, PIN_LEN } from "../config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
 // Replica exata do firmware (src/main.cpp: hmacSha256):
-// HMAC-SHA256(msg="ABRIR", key=PIN) com mbedtls, truncado nos 16
-// primeiros bytes -> 32 chars hex minúsculos.
+// HMAC-SHA256(msg="ABRIR", key=PIN) com mbedtls, truncado nos primeiros
+// TOKEN_HEX_LEN/2 bytes -> TOKEN_HEX_LEN chars hex minúsculos.
 export async function gerarToken(pin) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -24,16 +24,16 @@ export async function gerarToken(pin) {
     key,
     new TextEncoder().encode(PALAVRA_COMANDO),
   );
-  const bytes = new Uint8Array(sig).slice(0, 16);
+  const bytes = new Uint8Array(sig).slice(0, TOKEN_HEX_LEN / 2);
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function validarPin(pin) {
-  return /^[0-9*#]{4,16}$/.test(pin ?? "");
+  return new RegExp(`^[0-9]{${PIN_LEN}}$`).test(pin ?? "");
 }
 
 export async function enviarToken({ email, password, devicePath, pin }) {
-  if (!validarPin(pin)) throw new Error("PIN inválido: use 4–16 dígitos.");
+  if (!validarPin(pin)) throw new Error(`PIN inválido: use ${PIN_LEN} dígitos.`);
   const token = await gerarToken(pin);
   await signInWithEmailAndPassword(auth, email, password);
   try {

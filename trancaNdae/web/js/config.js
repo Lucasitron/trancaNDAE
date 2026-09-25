@@ -15,6 +15,11 @@ export const PALAVRA_COMANDO = "ABRIR";
 // O ESP32 ignora tokens além deste limite; a web publica no máximo isso.
 export const MAX_SENHAS = 20;
 
+// Token = HMAC-SHA256("ABRIR", PIN) truncado (4 hex = 2 bytes) e PIN de
+// 4 dígitos. Espelha include/senhas_store.h (TOKEN_HEX_LEN, PIN_LEN).
+export const TOKEN_HEX_LEN = 4;
+export const PIN_LEN = 4;
+
 export const DEVICE_DEFAULT = "dispositivo1";
 
 // Layout no RTDB (o ESP32 lê SOMENTE `lista`; `itens` é só p/ a web):
