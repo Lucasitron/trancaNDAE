@@ -1,9 +1,20 @@
-build/
-*.o
+# ================= PlatformIO =================
+.pio/
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+compile_commands.json
+firmware/include/secrets.h
 
+# ================= Node.js =================
+backend/node_modules/
+backend/.env
+backend/npm-debug.log*
 
-secrets.h
+# ================= SQLite =================
+backend/config/database/*.sqlite-journal
+backend/config/database/*.sqlite-wal
 
-# Simulation files (branch-specific)
-diagram.json
-wokwi.toml
+# ================= Sistema =================
+.DS_Store
+Thumbs.db
+*.log
