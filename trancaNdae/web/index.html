@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Casa do Estudante — Gerenciador de Senhas</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+        "firebase/database": "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main class="card largo">
+    <h1>🔐 Casa do Estudante — Senhas de acesso</h1>
+    <p class="subtitle">Senhas temporárias da tranca. O PIN nunca trafega na rede:
+      a página publica só o HMAC-SHA256 de <code>"ABRIR"</code> e o ESP32 valida
+      na hora da digitação (máx. 20 ativas).</p>
+
+    <section id="login-section">
+      <h2>Entrar</h2>
+      <form id="login-form">
+        <label for="login-email">E-mail (Firebase Auth)</label>
+        <input id="login-email" type="email" autocomplete="username" required value="esp32@casadoestudante.ufpa" />
+        <label for="login-password">Senha</label>
+        <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+        <button type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <section id="manager-section" hidden>
+      <div class="barra">
+        <div>
+          <label for="device">Dispositivo</label>
+          <input id="device" type="text" value="dispositivo1" required />
+        </div>
+        <div class="barra-botoes">
+          <button id="btn-limpar-expiradas" type="button">Limpar expiradas</button>
+          <button id="btn-logout" type="button" class="secundario">Sair</button>
+        </div>
+      </div>
+
+      <h2>Nova senha temporária</h2>
+      <form id="form-criar" class="grade">
+        <div>
+          <label for="nome">Nome (morador/visitante)</label>
+          <input id="nome" type="text" maxlength="40" required placeholder="Ex.: Maria — Q12" />
+        </div>
+        <div>
+          <label for="pin">PIN (4–16 dígitos)</label>
+          <div class="linha">
+            <input id="pin" type="text" inputmode="numeric" autocomplete="off" required
+                   minlength="4" maxlength="16" pattern="[0-9*#]{4,16}" placeholder="Ex.: 482916" />
+            <button id="btn-gerar-pin" type="button" class="secundario">Gerar</button>
+          </div>
+        </div>
+        <div>
+          <label for="validade">Validade</label>
+          <select id="validade">
+            <option value="2">2 horas</option>
+            <option value="12" selected>12 horas</option>
+            <option value="24">24 horas</option>
+            <option value="168">7 dias</option>
+            <option value="0">Sem expiração</option>
+          </select>
+        </div>
+        <button type="submit">Criar e publicar</button>
+      </form>
+      <p id="pin-uma-vez" class="pin-uma-vez" hidden></p>
+
+      <h2>Senhas cadastradas <span id="count" class="count"></span></h2>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr><th>Nome</th><th>Criada</th><th>Expira</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="senhas-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="status" class="status" aria-live="polite">Faça login para gerenciar.</section>
+
+    <details>
+      <summary>Como funciona</summary>
+      <ol>
+        <li>Ao criar, o navegador calcula <code>HMAC-SHA256("ABRIR", PIN)</code> (32 hex, igual ao firmware) e grava em <code>senhas/{dispositivo}/itens</code>, depois recompõe <code>senhas/{dispositivo}/lista</code> (CSV só com ativas e não expiradas, máx. 20).</li>
+        <li>O ESP32 faz stream só da <code>lista</code> (uma string, sem JSON) e guarda em RAM+NVS limitadas. Bloquear/excluir/expirar = sumir da lista = slot liberado. Não há blocklist que cresce.</li>
+        <li>O morador digita o PIN no teclado; o ESP32 recalcula o HMAC e abre se estiver na tabela. Lista vazia = tudo bloqueado (fail-closed).</li>
+      </ol>
+    </details>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
