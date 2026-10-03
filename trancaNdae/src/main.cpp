@@ -1,8 +1,13 @@
-// main.ino
+// main.cpp — Fechadura eletrônica (oficial, sem cripto).
+//
+// Fluxo: página web grava código plain de 4 dígitos no Firebase
+//   - /senhas/dispositivo1/lista  = "1234,5678" (CSV, várias chaves)
+//   - /comandos/dispositivo1      = "1234"      (uso único, legado)
+// O ESP espelha no NVS/RAM e compara direto com o digitado.
+// Relé no GPIO 4. Sem buzzer.
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <Keypad.h>
 
 // ================= Módulos do Projeto =================
 #include "pins.h"
@@ -12,33 +17,97 @@
 #include "senhas_store.h"
 #include "telnet_log.h"
 
-// ================= Configurações do Teclado (3x4) =================
+// ================= Teclado 3x4 (varredura manual) =================
+// Linhas = saída (HIGH em repouso, LOW para varrer).
+// Colunas = entrada com pull-up (tecla = LOW).
 const byte ROWS = 4;
 const byte COLS = 3;
-char keys[ROWS][COLS] = {
+byte rowPins[ROWS] = {KEYPAD_ROW_1, KEYPAD_ROW_2, KEYPAD_ROW_3, KEYPAD_ROW_4};
+byte colPins[COLS] = {KEYPAD_COL_1, KEYPAD_COL_2, KEYPAD_COL_3};
+char keysMap[ROWS][COLS] = {
     {'1', '2', '3'},
     {'4', '5', '6'},
     {'7', '8', '9'},
     {'*', '0', '#'}};
-byte rowPins[ROWS] = {KEYPAD_ROW_1, KEYPAD_ROW_2, KEYPAD_ROW_3, KEYPAD_ROW_4};
-byte colPins[COLS] = {KEYPAD_COL_1, KEYPAD_COL_2, KEYPAD_COL_3};
-Keypad teclado = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
-// ================= Objetos Globais =================
+// Varre a matriz e retorna a tecla pressionada (0 = nenhuma).
+// Debounce de 20ms + espera soltar. outR/outC = índices físicos (diagnóstico).
+char lerTeclado(byte *outR = nullptr, byte *outC = nullptr)
+{
+    for (byte r = 0; r < ROWS; r++)
+    {
+        digitalWrite(rowPins[r], LOW);
+        delayMicroseconds(50);
+        for (byte c = 0; c < COLS; c++)
+        {
+            if (digitalRead(colPins[c]) == LOW)
+            {
+                delay(20);
+                if (digitalRead(colPins[c]) == LOW)
+                {
+                    while (digitalRead(colPins[c]) == LOW)
+                        delay(10); // espera soltar
+                    digitalWrite(rowPins[r], HIGH);
+                    if (outR)
+                        *outR = r;
+                    if (outC)
+                        *outC = c;
+                    return keysMap[r][c];
+                }
+            }
+        }
+        digitalWrite(rowPins[r], HIGH);
+    }
+    return 0;
+}
+
+// ================= LCD (I2C, com auto-detecção) =================
+// USA_LCD 0 = roda sem I2C (só Serial/Telnet). Com 1, se o endereço não
+// responder no boot o LCD desliga sozinho (lcdOK=false) sem travar o teste.
+#define USA_LCD 1
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+bool lcdOK = false;
+
+bool escanearI2C()
+{
+    tlogf("I2C: procurando LCD em 0x%02X...\n", LCD_I2C_ADDRESS);
+    bool achou = false;
+    for (uint8_t addr = 1; addr < 127; addr++)
+    {
+        Wire.beginTransmission(addr);
+        if (Wire.endTransmission() == 0)
+        {
+            tlogf("I2C: dispositivo em 0x%02X%s\n",
+                  addr, (addr == LCD_I2C_ADDRESS ? " <- LCD" : ""));
+            if (addr == LCD_I2C_ADDRESS)
+                achou = true;
+        }
+    }
+    if (!achou)
+        tlogln("I2C: LCD NAO responde. Seguindo sem display.");
+    return achou;
+}
+
+// ================= Estado da Fechadura =================
+// Relé energizado = porta ABERTA. GPIO 4 é seguro (sem strapping).
+// Se o seu módulo for ativo em LOW, inverta os dois defines abaixo.
+#define RELE_FECHADO LOW
+#define RELE_ABERTO HIGH
+const unsigned long TEMPO_PORTA_ABERTA_MS = 5000; // fecha sozinha após 5s
+
+bool portaAberta = false;
+unsigned long momentoAbertura = 0;
 
 // ================= Estado da Validação =================
 String pinDigitado = "";
-const int PIN_MAX_LENGTH = PIN_LEN; // senhas de 4 dígitos (senhas_store.h)
-const char *PALAVRA_ESPERADA = "ABRIR";
+const int PIN_MAX_LENGTH = PIN_LEN; // 4 dígitos: valida sozinho
 
-// ================= Variáveis de Estado do Display =================
+// ================= Display (com anti-spam I2C) =================
 String linhaStatus = "Sistema Iniciado";
 String linhaMensagem = "Aguardando...";
 String linhaTeclado = "";
 String linhaRodape = "Aguardando comando";
 
-// ================= Funções Auxiliares =================
 void limparLinha(uint8_t linha)
 {
     lcd.setCursor(0, linha);
@@ -60,6 +129,26 @@ String centralizar(const String &texto)
 
 void atualizarDisplay()
 {
+    static String ultStatus = "";
+    static String ultMsg = "";
+    static String ultTeclado = "";
+    static String ultRodape = "";
+    if (linhaStatus == ultStatus && linhaMensagem == ultMsg &&
+        linhaTeclado == ultTeclado && linhaRodape == ultRodape)
+        return; // sem mudança: poupa o I2C
+    ultStatus = linhaStatus;
+    ultMsg = linhaMensagem;
+    ultTeclado = linhaTeclado;
+    ultRodape = linhaRodape;
+
+    if (!lcdOK)
+    {
+        tlogf("[LCD] %s | %s | %s | %s\n",
+              linhaStatus.c_str(), linhaMensagem.c_str(),
+              linhaTeclado.c_str(), linhaRodape.c_str());
+        return;
+    }
+
     lcd.setCursor(0, 0);
     lcd.print(centralizar(linhaStatus));
     limparLinha(1);
@@ -83,47 +172,58 @@ void mostrarNoLCD(const String &status, const String &mensagem,
     atualizarDisplay();
 }
 
-// ================= HMAC-SHA256 (truncado) =================
-// Calcula o HMAC-SHA256 completo mas retorna só os primeiros
-// TOKEN_HEX_LEN/2 bytes em hex (TOKEN_HEX_LEN=4 -> 2 bytes -> "a3f5").
-// Deve ser idêntico ao gerarToken() da web (web/js/models/TokenModel.js).
-#include <mbedtls/md.h>
-String hmacSha256(const String &mensagem, const String &chave)
+void telaAguardando()
 {
-    byte hash[32];
-    mbedtls_md_context_t ctx;
-    mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-
-    mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
-    mbedtls_md_hmac_starts(&ctx, (const unsigned char *)chave.c_str(), chave.length());
-    mbedtls_md_hmac_update(&ctx, (const unsigned char *)mensagem.c_str(), mensagem.length());
-    mbedtls_md_hmac_finish(&ctx, hash);
-    mbedtls_md_free(&ctx);
-
-    char hex[TOKEN_HEX_LEN + 1];
-    for (int i = 0; i < TOKEN_HEX_LEN / 2; i++)
-        sprintf(hex + (i * 2), "%02x", hash[i]);
-    hex[TOKEN_HEX_LEN] = '\0';
-    return String(hex);
+    if (senhas_total() > 0)
+    {
+        char rodape[21];
+        snprintf(rodape, sizeof(rodape), "%d chave(s) ativa(s)", senhas_total());
+        mostrarNoLCD("Aguardando...", "Digite a chave + #", "", rodape);
+    }
+    else
+    {
+        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
+    }
 }
 
-// ================= Validação da Chave =================
-// 1) Tabela de senhas cadastradas (gerenciador web -> /senhas/.../lista).
-// 2) Fallback: comando único legado (/comandos/dispositivo1, uso único).
+// ================= Fechadura =================
+void abrirPorta(const String &motivo)
+{
+    digitalWrite(PINO_RELE, RELE_ABERTO);
+    portaAberta = true;
+    momentoAbertura = millis();
+    pinDigitado = "";
+    mostrarNoLCD("PORTA ABERTA", "Empurre a porta", "", "Fechando sozinha...");
+    tlogln("🔓 Porta ABERTA (" + motivo + ").");
+}
+
+void fecharPorta()
+{
+    digitalWrite(PINO_RELE, RELE_FECHADO);
+    portaAberta = false;
+    tlogln("🔒 Porta FECHADA (timeout).");
+    telaAguardando();
+}
+
+// ================= Validação (comparação direta, sem cripto) =================
+// 1) Tabela de chaves (web -> /senhas/dispositivo1/lista, CSV "1234,5678").
+// 2) Fallback: comando único (/comandos/dispositivo1 = "1234", uso único).
 void validarChave(const String &chave)
 {
-    String hashCalculado = hmacSha256(PALAVRA_ESPERADA, chave);
+    String codigo = chave;
+    codigo.trim();
 
-    if (senhas_contem(hashCalculado))
+    if (codigo.length() != PIN_LEN)
     {
-        mostrarNoLCD(">>> SUCESSO <<<", "Acesso liberado", "", "Chave cadastrada OK");
-        tone(PINO_BUZZER, 1500, 200);
+        mostrarNoLCD("!! INVALIDO !!", "Codigo incompleto", "", "4 digitos + #");
+        delay(1500);
+        telaAguardando();
+        return;
+    }
 
-        digitalWrite(PINO_RELE, !digitalRead(PINO_RELE));
-
-        delay(2000);
-        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
+    if (senhas_contem(codigo))
+    {
+        abrirPorta("chave cadastrada");
         return;
     }
 
@@ -132,32 +232,21 @@ void validarChave(const String &chave)
     if (token.length() == 0)
     {
         mostrarNoLCD("Sem comando", "Nenhum comando pendente", "", "Aguarde o PC enviar");
-        tone(PINO_BUZZER, 400, 300);
         delay(1500);
-        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
+        telaAguardando();
         return;
     }
 
-    String hashCalculado2 = hmacSha256(PALAVRA_ESPERADA, chave);
-    bool valido = (hashCalculado2 == token);
-
-    if (valido)
+    if (codigo == token)
     {
-        mostrarNoLCD(">>> SUCESSO <<<", "Rele alternado", "", "Comando consumido");
-        tone(PINO_BUZZER, 1500, 200);
-
-        digitalWrite(PINO_RELE, !digitalRead(PINO_RELE));
-        limpar_token_nvs(); // Anti-replay
-
-        delay(2000);
-        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
+        limpar_token_nvs(); // Anti-replay (uso único)
+        abrirPorta("comando único");
     }
     else
     {
         mostrarNoLCD("!! INVALIDO !!", "Chave incorreta", "", "Tente novamente");
-        tone(PINO_BUZZER, 400, 300);
         delay(1500);
-        mostrarNoLCD("Aguardando...", "Comando remoto", "", "Digite a chave + #");
+        telaAguardando();
     }
 }
 
@@ -166,31 +255,44 @@ void setup()
 {
     Serial.begin(115200);
     delay(500);
-    tlogln("\n=== Iniciando Sistema ===");
+    tlogln("\n=== Iniciando Fechadura ===");
 
-    // 0. Tabela de senhas cadastradas (NVS -> RAM, máx. MAX_SENHAS)
+    // 0. Chaves em cache (NVS -> RAM). Sem Wi-Fi a fechadura segue operando.
     senhas_init();
 
-    // 1. Pinos
+    // 1. Relé (porta começa FECHADA). Sem buzzer no hardware.
     pinMode(PINO_RELE, OUTPUT);
-    digitalWrite(PINO_RELE, LOW);
-    pinMode(PINO_BUZZER, OUTPUT);
-    digitalWrite(PINO_BUZZER, LOW);
+    digitalWrite(PINO_RELE, RELE_FECHADO);
 
+    // 2. Teclado: linhas saída HIGH, colunas entrada pull-up
+    for (byte r = 0; r < ROWS; r++)
+    {
+        pinMode(rowPins[r], OUTPUT);
+        digitalWrite(rowPins[r], HIGH);
+    }
+    for (byte c = 0; c < COLS; c++)
+        pinMode(colPins[c], INPUT_PULLUP);
 
-
-    // 3. LCD
-    lcd.init();
-    lcd.backlight();
-    mostrarNoLCD("Sistema Iniciado", "Bem-vindo!", "", "Versao 1.0");
-    tone(PINO_BUZZER, 1000, 200);
+    // 3. LCD (com auto-detecção)
+#if USA_LCD
+    Wire.begin(); // SDA=21, SCL=22 (padrão)
+    if (escanearI2C())
+    {
+        lcd.init();
+        lcd.backlight();
+        lcdOK = true;
+    }
+#else
+    tlogln("LCD desligado (USA_LCD=0). Teste via Serial/Telnet.");
+#endif
+    mostrarNoLCD("Sistema Iniciado", "Bem-vindo!", "", "Versao 3.0");
     delay(800);
 
     // 4. Wi-Fi
     WiFi.onEvent(eventoWiFi);
     conectarWiFi();
 
-    // 5. OTA + Firebase + Telnet
+    // 5. OTA + Telnet + Firebase
     if (wifiConectado)
     {
         iniciarOTA();
@@ -200,14 +302,14 @@ void setup()
     }
     else
     {
-        mostrarNoLCD("WiFi OFF", "Sem conexao", "", "Verifique config");
+        mostrarNoLCD("WiFi OFF", "Modo offline", "", "Chaves em cache OK");
     }
 
-    // 6. Recupera token pendente da NVS (migração: descarta formato antigo)
+    // 6. Descarta token em formato antigo (era hash; agora são 4 dígitos)
     String tokenPendente = ler_token_nvs();
     if (tokenPendente.length() > 0 && tokenPendente.length() != TOKEN_HEX_LEN)
     {
-        limpar_token_nvs(); // token do formato antigo (32/64 hex) — inválido agora
+        limpar_token_nvs();
         tokenPendente = "";
     }
     if (tokenPendente.length() > 0)
@@ -215,14 +317,12 @@ void setup()
         tlogln("Token pendente na NVS: " + tokenPendente);
         mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
     }
-    else if (senhas_total() > 0)
+    else
     {
-        char rodape[21];
-        snprintf(rodape, sizeof(rodape), "%d chave(s) ativa(s)", senhas_total());
-        mostrarNoLCD("Sistema Online", "Digite a chave + #", "", rodape);
+        telaAguardando();
     }
 
-    tlogln("=== Sistema pronto ===");
+    tlogln("=== Sistema pronto (fechadura) ===");
     tlog("Telnet: telnet ");
     tlog_raw(WiFi.localIP().toString());
     tlogf(" %d\n", TELNET_PORT);
@@ -236,42 +336,47 @@ void loop()
     processarFirebase();
     telnet_loop();
 
-    // 3. Verifica novo token recebido via stream
+    // 2. Auto-fechamento (não-bloqueante)
+    if (portaAberta && (millis() - momentoAbertura >= TEMPO_PORTA_ABERTA_MS))
+        fecharPorta();
+
+    // 3. Verifica lista/token recebidos via stream
     static unsigned long ultimoCheckToken = 0;
     if (millis() - ultimoCheckToken > 2000)
     {
         ultimoCheckToken = millis();
         if (senhas_consumirMudanca())
         {
-            char rodape[21];
-            snprintf(rodape, sizeof(rodape), "%d chave(s) ativa(s)", senhas_total());
-            mostrarNoLCD("Lista atualizada", "Digite a chave + #", "", rodape);
-            tone(PINO_BUZZER, 1500, 150);
+            if (!portaAberta)
+                telaAguardando();
         }
         static String tokenAnterior = "";
         String tokenAtual = ler_token_nvs();
         if (tokenAtual.length() == 0)
         {
-            // Token consumido/limpo: reseta para não perder o próximo aviso
             tokenAnterior = "";
         }
-        else if (tokenAtual != tokenAnterior)
+        else if (tokenAtual != tokenAnterior && !portaAberta)
         {
             tokenAnterior = tokenAtual;
             mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
-            tone(PINO_BUZZER, 1500, 150);
         }
     }
 
-    // 4. Teclado
-    char tecla = teclado.getKey();
+    // 4. Teclado (ignorado com a porta aberta)
+    if (portaAberta)
+        return;
+
+    byte idxR = 0, idxC = 0;
+    char tecla = lerTeclado(&idxR, &idxC);
     if (tecla)
     {
-        tlog("Tecla: ");
-        tlogln(String(tecla));
+        tlogf("Tecla: %c (R%d C%d)\n", tecla, idxR, idxC);
 
         if (tecla == '#')
         {
+            tlog("Valor digitado: ");
+            tlogln(pinDigitado);
             validarChave(pinDigitado);
             pinDigitado = "";
         }
@@ -280,6 +385,7 @@ void loop()
             pinDigitado = "";
             linhaTeclado = "";
             atualizarDisplay();
+            tlogln("Buffer limpo.");
         }
         else
         {
@@ -291,9 +397,11 @@ void loop()
                     mascara += '*';
                 linhaTeclado = mascara;
                 atualizarDisplay();
+                tlog("Buffer atual: ");
+                tlogln(pinDigitado);
                 if (pinDigitado.length() >= PIN_MAX_LENGTH)
                 {
-                    validarChave(pinDigitado); // PIN de 4 dígitos: valida sozinho
+                    validarChave(pinDigitado); // 4 dígitos: valida sozinho
                     pinDigitado = "";
                 }
             }

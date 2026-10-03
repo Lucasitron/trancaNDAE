@@ -123,14 +123,17 @@ void processData(AsyncResult &aResult)
         {
             bool ehListaSenhas = (aResult.uid() == "senhasTask");
 
-            // Nó removido: lista vazia = zero chaves (fail-closed);
-            // comando único vazio = nada a fazer.
+            // Nó removido/ausente: o comando único vazio é só informativo.
+            // A lista de senhas NUNCA é apagada por null (pode ser um
+            // reconnect transitório): o cache NVS/RAM é mantido. A
+            // revogação deliberada (inclusive total) sempre chega como
+            // string — "" significa zero chaves.
             if (stream.type() == 0 /* null */)
             {
                 if (ehListaSenhas)
-                    senhas_sync_csv("");
+                    Serial.println("ℹ️ Lista de senhas ausente (null). Cache mantido.");
                 else
-                    tlogln("ℹ️ Nó do Firebase vazio (null).");
+                    Serial.println("ℹ️ Nó do Firebase vazio (null).");
                 return;
             }
 
