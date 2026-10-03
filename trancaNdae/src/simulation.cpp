@@ -7,7 +7,6 @@
 
 // ================= DEPENDÊNCIAS EXTERNAS (definidas no main.ino) =================
 // Declaradas como extern para evitar duplicação
-extern String hmacSha256(const String &mensagem, const String &chave);
 extern void mostrarNoLCD(const String &status, const String &mensagem,
                          const String &teclado, const String &rodape);
 
@@ -26,18 +25,16 @@ void simulation_setup()
 // ================= LOOP =================
 void simulation_loop()
 {
-    // --- 1. Botão TEST gera token HMAC e salva na NVS ---
+    // --- 1. Botão TEST grava código plain de teste e salva na NVS ---
     bool estadoAtual = digitalRead(PINO_BOTAO_TESTE);
 
     if (ultimoEstadoBotao == HIGH && estadoAtual == LOW) // borda de descida
     {
-        // Gera o HMAC de "ABRIR" com a chave de teste "1234" (PIN_LEN dígitos)
-        String tokenTeste = hmacSha256("ABRIR", "1234");
-        salvar_token_nvs(tokenTeste);
+        // Código de teste "1234" (sem cripto, igual ao fluxo da web)
+        salvar_token_nvs("1234");
 
-        Serial.println("[WOKWI] Token de teste gravado: " + tokenTeste);
+        Serial.println("[WOKWI] Código de teste gravado: 1234");
         mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
-        tone(PINO_BUZZER, 1500, 150);
     }
     ultimoEstadoBotao = estadoAtual;
 

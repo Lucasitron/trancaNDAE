@@ -3,17 +3,20 @@
 #define PINS_H
 
 // --- Atuadores ---
-#define PINO_RELE 33
-#define PINO_BUZZER 25 // era GPIO 4, que conflita com KEYPAD_COL_2
+// Relé no GPIO 4 (seguro, sem strapping). Sem buzzer no hardware.
+#define PINO_RELE 4
 
-// --- Teclado matricial 3x4 (real) ---
-#define KEYPAD_ROW_1 19
-#define KEYPAD_ROW_2 18
-#define KEYPAD_ROW_3 5
-#define KEYPAD_ROW_4 17
-#define KEYPAD_COL_1 16
-#define KEYPAD_COL_2 4
-#define KEYPAD_COL_3 15
+
+// --- Teclado matricial 3x4 (hardware real, conector H2) ---
+// ORDEM IMPORTA: ROW_1/COL_1 = fileira/coluna física do '1' (canto superior
+// esquerdo). R0..R3 = linhas, C0..C2 = colunas do esquema.
+#define KEYPAD_ROW_1 27 // R0
+#define KEYPAD_ROW_2 13 // R1 (era 35: só-entrada, sem pull-up -> erro gpio_pullup_en a cada scan)
+#define KEYPAD_ROW_3 32 // R2
+#define KEYPAD_ROW_4 25 // R3
+#define KEYPAD_COL_1 26 // C0
+#define KEYPAD_COL_2 14 // C1
+#define KEYPAD_COL_3 33 // C2
 //#define KEYPAD_COL_4 32 // <-- Só usada no Wokwi (4ª coluna)
 
 // --- LCD I2C (20x4) ---
@@ -23,7 +26,7 @@
 
 // --- Pinos de simulação Wokwi ---
 #ifdef WOKWI_SIM
-#define PINO_BOTAO_TESTE 5
+#define PINO_BOTAO_TESTE 5 // livre (fora do Wokwi não é compilado)
 #define PINO_LED_STATUS 2
 #endif
 

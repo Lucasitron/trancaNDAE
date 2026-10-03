@@ -6,20 +6,20 @@ Centraliza **todas** as definições de pinos do projeto. Fonte única de verdad
 
 | Define | GPIO | Componente |
 | :--- | :--- | :--- |
-| `PINO_RELE` | 15 | Módulo relé (via 2N2222A) |
-| `PINO_BUZZER` | 4 | Buzzer |
+| `PINO_RELE` | 4 | Módulo relé (via 2N2222A) |
+| Buzzer | — | Removido do hardware |
 
-## Teclado Matricial
+## Teclado Matricial (conector H2 — hardware real)
 
 | Define | GPIO | Função |
 | :--- | :--- | :--- |
-| `KEYPAD_ROW_1` | 13 | Linha 1 |
-| `KEYPAD_ROW_2` | 12 | Linha 2 |
-| `KEYPAD_ROW_3` | 14 | Linha 3 |
-| `KEYPAD_ROW_4` | 27 | Linha 4 |
-| `KEYPAD_COL_1` | 26 | Coluna 1 |
-| `KEYPAD_COL_2` | 25 | Coluna 2 |
-| `KEYPAD_COL_3` | 33 | Coluna 3 |
+| `KEYPAD_ROW_1` | 27 | Linha R0 (teclas 1, 2, 3) |
+| `KEYPAD_ROW_2` | 13 | Linha R1 (teclas 4, 5, 6) |
+| `KEYPAD_ROW_3` | 32 | Linha R2 (teclas 7, 8, 9) |
+| `KEYPAD_ROW_4` | 25 | Linha R3 (teclas *, 0, #) |
+| `KEYPAD_COL_1` | 26 | Coluna C0 |
+| `KEYPAD_COL_2` | 14 | Coluna C1 |
+| `KEYPAD_COL_3` | 33 | Coluna C2 |
 | `KEYPAD_COL_4` | 32 | Coluna 4 (só Wokwi) |
 
 ## LCD I2C

@@ -85,11 +85,11 @@ tranca-esp32/
 
 | Componente | Pino ESP32 | Observação |
 | :--- | :--- | :--- |
-| **Relé** | GPIO 15 | Via transistor 2N2222A + diodo 1N4007 |
-| **Buzzer** | GPIO 4 | Passivo ou ativo |
+| **Relé** | GPIO 4 | Via transistor 2N2222A + diodo 1N4007 |
+| **Buzzer** | — | Removido |
 | **LCD 20x4 I2C** | GPIO 21 (SDA), 22 (SCL) | Endereço `0x27` |
-| **Teclado R1-R4** | GPIO 13, 12, 14, 27 | Linhas |
-| **Teclado C1-C3** | GPIO 26, 25, 33 | Colunas (3x4 real) |
+| **Teclado R0-R3** | GPIO 27, 13, 32, 25 | Linhas |
+| **Teclado C0-C2** | GPIO 26, 14, 33 | Colunas (3x4 real) |
 | **Teclado C4** | GPIO 32 | Só no Wokwi (4x4) |
 | **Alimentação** | LM7805 → 5V | VIN do ESP32 |
 
