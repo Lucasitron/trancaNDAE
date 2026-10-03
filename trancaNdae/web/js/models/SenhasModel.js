@@ -1,11 +1,12 @@
 // Model: CRUD das senhas + publicação da lista compacta. Não toca no DOM.
 //
 // Esquema no RTDB (ver js/config.js):
-//   senhas/{device}/itens/{pushId} = { nome, token, ativa, expiraEm, criadaEm }
-//   senhas/{device}/lista          = "tok1,tok2,..." (só ativas e não expiradas)
+//   senhas/{device}/itens/{pushId} = { nome, pin, ativa, expiraEm, criadaEm }
+//   senhas/{device}/lista          = "1234,5678,..." (só ativas e não expiradas)
 //
-// O ESP32 faz stream SOMENTE de `lista` (string, sem JSON) e o PIN nunca
-// trafega na rede: a web publica só o HMAC("ABRIR", PIN), igual ao firmware.
+// MODO PLAIN (sem cripto, por hora): o ESP32 compara direto o PIN digitado.
+// A web publica os PINs em claro em `lista`. Itens antigos (só com `token`
+// hash, sem `pin`) são ignorados — recadastre as senhas.
 import { getApps, initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -23,7 +24,7 @@ import {
   set,
 } from "firebase/database";
 import { firebaseConfig, MAX_SENHAS, PIN_LEN, caminhoItens, caminhoLista } from "../config.js";
-import { gerarToken, validarPin } from "./TokenModel.js";
+import { validarPin } from "./TokenModel.js";
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -38,14 +39,15 @@ export const statusDe = (item, agora = Date.now()) => {
   return "ativa";
 };
 
-// Itens que o ESP32 aceita: ativas, não expiradas, no máximo MAX_SENHAS.
+// Itens que o ESP32 aceita: ativas, não expiradas, com PIN válido,
+// no máximo MAX_SENHAS. Publica o PIN em claro (modo plain, sem cripto).
 export function tokensPublicaveis(itensObj) {
   const agora = Date.now();
   return Object.values(itensObj ?? {})
-    .filter((it) => it?.ativa && !isExpirada(it, agora) && typeof it?.token === "string")
+    .filter((it) => it?.ativa && !isExpirada(it, agora) && validarPin(it?.pin))
     .sort((a, b) => (a.criadaEm ?? 0) - (b.criadaEm ?? 0))
     .slice(0, MAX_SENHAS)
-    .map((it) => it.token);
+    .map((it) => it.pin);
 }
 
 async function lerItens(device) {
@@ -77,8 +79,7 @@ export async function criarSenha(device, { nome, pin, validadeHoras }) {
   if (tokensPublicaveis(itens).length >= MAX_SENHAS)
     throw new Error(`Limite de ${MAX_SENHAS} senhas ativas atingido.`);
 
-  const token = await gerarToken(pin);
-  if (Object.values(itens).some((it) => it?.token === token))
+  if (Object.values(itens).some((it) => it?.pin === pin))
     throw new Error("Este PIN já está cadastrado.");
 
   const agora = Date.now();
@@ -86,7 +87,7 @@ export async function criarSenha(device, { nome, pin, validadeHoras }) {
     validadeHoras > 0 ? agora + validadeHoras * 3600_000 : 0; // 0 = sem expiração
   const novo = await push(ref(db, caminhoItens(device)), {
     nome,
-    token,
+    pin,
     ativa: true,
     expiraEm,
     criadaEm: agora,

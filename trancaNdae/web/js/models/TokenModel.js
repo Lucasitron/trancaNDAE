@@ -1,4 +1,4 @@
-// Model: HMAC + Firebase. Não toca no DOM.
+// Model: comando único + Firebase. Não toca no DOM.
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getDatabase, ref, set } from "firebase/database";
@@ -8,9 +8,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// Replica exata do firmware (src/main.cpp: hmacSha256):
-// HMAC-SHA256(msg="ABRIR", key=PIN) com mbedtls, truncado nos primeiros
-// TOKEN_HEX_LEN/2 bytes -> TOKEN_HEX_LEN chars hex minúsculos.
+// MODO PLAIN (sem cripto, por hora): publica o PIN em claro; o ESP32
+// compara direto com o digitado. gerarToken() mantido p/ retorno futuro.
+// Réplica futura do firmware seria: HMAC-SHA256(msg="ABRIR", key=PIN)
+// com mbedtls, truncado nos primeiros TOKEN_HEX_LEN/2 bytes.
 export async function gerarToken(pin) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -34,12 +35,11 @@ export function validarPin(pin) {
 
 export async function enviarToken({ email, password, devicePath, pin }) {
   if (!validarPin(pin)) throw new Error(`PIN inválido: use ${PIN_LEN} dígitos.`);
-  const token = await gerarToken(pin);
   await signInWithEmailAndPassword(auth, email, password);
   try {
-    await set(ref(db, devicePath), token);
+    await set(ref(db, devicePath), pin);
   } finally {
     await signOut(auth).catch(() => {});
   }
-  return token;
+  return pin;
 }
