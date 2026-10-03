@@ -31,7 +31,7 @@ export class TokenView {
 
   ok(token, path) {
     this.status.className = "status ok";
-    this.status.textContent = `✅ Token enviado para /${path}: ${token}`;
+    this.status.textContent = `✅ Código enviado para /${path}: ${token}`;
   }
 
   erro(e) {
