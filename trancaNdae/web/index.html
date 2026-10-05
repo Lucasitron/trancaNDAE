@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Casa do Estudante — Gerenciador de Senhas</title>
+  <title>Casa do Estudante — Controle da Tranca</title>
   <link rel="stylesheet" href="css/style.css" />
   <script type="importmap">
     {
@@ -17,81 +17,59 @@
 </head>
 <body>
   <main class="card largo">
-    <h1>🔐 Casa do Estudante — Senhas de acesso</h1>
-    <p class="subtitle">Senhas temporárias da tranca. O PIN nunca trafega na rede:
-      a página publica só o HMAC-SHA256 de <code>"ABRIR"</code> e o ESP32 valida
-      na hora da digitação (máx. 20 ativas).</p>
+    <h1>🔐 Casa do Estudante — Controle da tranca</h1>
+    <p class="subtitle">As senhas ficam <strong>somente no ESP</strong> (RAM+NVS).
+      A página envia comandos voláteis que a tranca consome e apaga do database.
+      Nada de senha permanece na nuvem.</p>
 
-    <section id="login-section">
-      <h2>Entrar</h2>
-      <form id="login-form">
-        <label for="login-email">E-mail (Firebase Auth)</label>
-        <input id="login-email" type="email" autocomplete="username" required value="admin.fablab.tuc@gmail.com" />
-        <label for="login-password">Senha</label>
-        <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••" />
-        <button type="submit">Entrar</button>
-      </form>
-    </section>
-
-    <section id="manager-section" hidden>
+    <section id="manager-section">
       <div class="barra">
         <div>
           <label for="device">Dispositivo</label>
           <input id="device" type="text" value="dispositivo1" required />
         </div>
         <div class="barra-botoes">
-          <button id="btn-limpar-expiradas" type="button">Limpar expiradas</button>
-          <button id="btn-logout" type="button" class="secundario">Sair</button>
+          <button id="btn-limpar-tudo" type="button" class="perigo">Apagar chaves do ESP</button>
         </div>
       </div>
 
-      <h2>Nova senha temporária</h2>
-      <form id="form-criar" class="grade">
+      <h2>Enviar código (cadastra no ESP)</h2>
+      <form id="form-enviar" class="grade" autocomplete="off">
         <div>
-          <label for="nome">Nome (morador/visitante)</label>
-          <input id="nome" type="text" maxlength="40" required placeholder="Ex.: Maria — Q12" />
+          <label for="nome-enviar">Nome (etiqueta única — ex.: Maria Q12)</label>
+          <input id="nome-enviar" type="text" autocomplete="off" required
+                 maxlength="24" placeholder="Ex.: Maria — Q12" />
         </div>
         <div>
-          <label for="pin">PIN (4 dígitos — a tranca valida sozinha ao completar)</label>
-          <div class="linha">
-            <input id="pin" type="text" inputmode="numeric" autocomplete="off" required
-                   minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="Ex.: 4829" />
-            <button id="btn-gerar-pin" type="button" class="secundario">Gerar</button>
-          </div>
+          <label for="pin-enviar">PIN (4 dígitos)</label>
+          <input id="pin-enviar" type="text" inputmode="numeric" autocomplete="off" required
+                 minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="Ex.: 4829" />
         </div>
-        <div>
-          <label for="validade">Validade</label>
-          <select id="validade">
-            <option value="2">2 horas</option>
-            <option value="12" selected>12 horas</option>
-            <option value="24">24 horas</option>
-            <option value="168">7 dias</option>
-            <option value="0">Sem expiração</option>
-          </select>
-        </div>
-        <button type="submit">Criar e publicar</button>
+        <button type="submit">Enviar para a tranca</button>
       </form>
-      <p id="pin-uma-vez" class="pin-uma-vez" hidden></p>
+      <p class="dica">Envie um por vez e aguarde o display do ESP confirmar antes do próximo.</p>
 
-      <h2>Senhas cadastradas <span id="count" class="count"></span></h2>
+      <h2>Chaves no ESP <span id="count" class="count"></span></h2>
+      <p id="resumo-info" class="dica">Carregando do ESP…</p>
       <div class="tabela-rolagem">
         <table>
           <thead>
-            <tr><th>Nome</th><th>Criada</th><th>Expira</th><th>Status</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Cadastrada em</th><th>Ações</th></tr>
           </thead>
-          <tbody id="senhas-tbody"></tbody>
+          <tbody id="chaves-tbody"></tbody>
         </table>
       </div>
+      <p class="dica">O PIN nunca volta do ESP: renovar/excluir usam o nome.</p>
     </section>
 
-    <section id="status" class="status" aria-live="polite">Faça login para gerenciar.</section>
+    <section id="status" class="status" aria-live="polite">Conectando…</section>
 
     <details>
       <summary>Como funciona</summary>
       <ol>
-        <li>Ao criar, o navegador calcula <code>HMAC-SHA256("ABRIR", PIN)</code> (4 hex, igual ao firmware) e grava em <code>senhas/{dispositivo}/itens</code>, depois recompõe <code>senhas/{dispositivo}/lista</code> (CSV só com ativas e não expiradas, máx. 20).</li>
-        <li>O ESP32 faz stream só da <code>lista</code> (uma string, sem JSON) e guarda em RAM+NVS limitadas. Bloquear/excluir/expirar = sumir da lista = slot liberado. Não há blocklist que cresce.</li>
-        <li>O morador digita o PIN no teclado; o ESP32 recalcula o HMAC e abre se estiver na tabela. Lista vazia = tudo bloqueado (fail-closed).</li>
+        <li>Ao enviar, a página grava <code>PIN:nome</code> em <code>comandos/{dispositivo}</code> (último comando vence — um por vez).</li>
+        <li>O ESP32 recebe via stream, cadastra na tabela local (RAM+NVS) e <strong>apaga o nó</strong> em seguida. <em>Renovar</em> troca o PIN; <em>Apagar</em> remove uma chave; <em>LIMPAR</em> zera tudo.</li>
+        <li>A página lê de volta só o <strong>resumo</strong> (<code>resumo/{dispositivo}</code>: nomes + datas, nunca o PIN). A abertura é <strong>somente no teclado</strong>, digitando o PIN + <code>#</code>.</li>
       </ol>
     </details>
   </main>

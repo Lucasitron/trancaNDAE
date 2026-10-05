@@ -1,6 +1,7 @@
 // Model (config): apenas dados de conexão. Sem DOM, sem regra de negócio.
-// Preencha com os mesmos valores de include/secrets.h.
-// apiKey de projeto web é pública por design (proteção real está nas Rules + Auth).
+// apiKey de projeto web é pública por design (proteção real está nas
+// Rules + Auth + App Check). Nenhuma senha é guardada aqui nem no RTDB:
+// a página só envia comandos voláteis que o ESP consome e apaga.
 export const firebaseConfig = {
   apiKey: "AIzaSyByBylcrbdPD6el0C2UbBeAdFvtFzWhFr4",
   authDomain: "trancandae-cd59b.firebaseapp.com",
@@ -8,23 +9,16 @@ export const firebaseConfig = {
   projectId: "trancandae-cd59b",
 };
 
-// Palavra-comando esperada pelo firmware (src/main.cpp: PALAVRA_ESPERADA).
-export const PALAVRA_COMANDO = "ABRIR";
-
-// Capacidade máxima da tabela no ESP32 (include/senhas_store.h: MAX_SENHAS).
-// O ESP32 ignora itens além deste limite; a web publica no máximo isso.
-export const MAX_SENHAS = 20;
-
-// MODO PLAIN (sem cripto, por hora): a web publica o PIN em claro e o ESP32
-// compara direto com o digitado. PIN de 4 dígitos (PIN_LEN).
-// Espelha include/senhas_store.h (TOKEN_HEX_LEN, PIN_LEN).
-export const TOKEN_HEX_LEN = 4;
+// PIN de 4 dígitos (igual a include/senhas_store.h: PIN_LEN).
 export const PIN_LEN = 4;
 
 export const DEVICE_DEFAULT = "dispositivo1";
 
-// Layout no RTDB (o ESP32 lê SOMENTE `lista`; `itens` é só p/ a web):
-//   senhas/{device}/lista        -> string CSV de PINs ("1234,5678")
-//   senhas/{device}/itens/{id}   -> { nome, pin, ativa, expiraEm, criadaEm }
-export const caminhoItens = (device) => `senhas/${device}/itens`;
-export const caminhoLista = (device) => `senhas/${device}/lista`;
+// Nó de comandos VOLÁTEIS (a web escreve, o ESP consome e apaga):
+//   comandos/{device} = "PIN:nome[:epoch]" | "RENOVAR:o:n[:e]"
+//                     | "DEL:pin" | "LIMPAR"
+// Nó de leitura (ESP -> web, SEM pin — só nome+data):
+//   resumo/{device} = {"total":N,"chaves":[{"nome":"..","criadaEm":E}]}
+export const caminhoComando = (device) => `comandos/${device}`;
+export const caminhoResumo = (device) => `resumo/${device}`;
+export const COMANDO_LIMPAR = "LIMPAR";
