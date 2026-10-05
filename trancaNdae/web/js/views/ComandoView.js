@@ -51,16 +51,15 @@ export class ComandoView {
     this.pin.value = "";
   }
 
-  // Renderiza o resumo vindo do ESP (metadados; o PIN nunca vem).
-  // Ações usam o NOME como chave (PINs não trafegam de volta).
-  // statusFn/relogio vêm do controller (regra de expiração).
-  renderResumo(resumo, formatarData, formatarValidade, statusDe) {
-    const chaves = resumo?.chaves ?? [];
+  // Renderiza os metadados (nome/data/validade/status). O PIN nunca vem.
+  // Ações usam o NOME como chave.
+  renderChaves(dados, formatarData, formatarValidade, statusDe) {
+    const chaves = dados?.chaves ?? [];
     const ativas = chaves.filter((c) => statusDe(c) === "ativa").length;
-    this.count.textContent = `(${ativas}/${chaves.length} ativas no ESP)`;
+    this.count.textContent = `(${ativas}/${chaves.length} ativas)`;
     this.atualizado.textContent = chaves.length
-      ? "Lista carregada do ESP (PINs nunca trafegam de volta)."
-      : "Nenhuma chave no ESP. Envie a primeira acima.";
+      ? "Metadados no Firebase (o PIN nunca é armazenado)."
+      : "Nenhuma chave cadastrada. Envie a primeira acima.";
     this.tbody.innerHTML = "";
     chaves.forEach((c) => {
       const st = statusDe(c);

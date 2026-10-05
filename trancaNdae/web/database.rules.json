@@ -2,14 +2,14 @@
   "rules": {
     "comandos": {
       "$device": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": true,
+        ".write": true
       }
     },
-    "resumo": {
+    "pessoas": {
       "$device": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": true,
+        ".write": true
       }
     }
   }

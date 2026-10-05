@@ -1,104 +1,56 @@
-// Model: comandos voláteis + leitura do resumo. Sem DOM, sem cripto.
-// Escrita (web -> ESP, apagada após consumo). O NOME é a chave de gerência
-// (único por tabela):
-//   comandos/{device} = "PIN:nome[:epoch]" | "RENOVAR:nome:novo[:epoch]"
-//                     | "DEL:nome" | "LIMPAR"
-// Leitura (ESP -> web, SEM pin — só nome+data):
-//   resumo/{device} = {"total":N,"chaves":[{"nome":"..","criadaEm":E}]}
-// Last-write-wins no comando: envie um por vez e aguarde confirmar.
+// Model: metadados (Firebase, geridos pela página) + comandos (ESP).
+// O PIN nunca é armazenado: só trafega no comando volátil, que o ESP
+// consome e apaga. Os metadados ficam em pessoas/{device}/{nome}.
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getDatabase, onValue, ref, remove, set } from "firebase/database";
+import { getDatabase, onValue, ref, remove, set, update } from "firebase/database";
 import {
   COMANDO_LIMPAR,
   caminhoComando,
-  caminhoResumo,
+  caminhoPessoas,
   firebaseConfig,
   PIN_LEN,
 } from "../config.js";
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getDatabase(app);
 
 export function validarPin(pin) {
   return new RegExp(`^[0-9]{${PIN_LEN}}$`).test(pin ?? "");
 }
 
+// Nome = chave no RTDB: sem . # $ / [ ] : " \ e sem controle.
 export function validarNome(nome) {
   const n = (nome ?? "").trim();
-  return n.length > 0 && n.length <= 24 && !/[:",\\\n\r]/.test(n);
+  return n.length > 0 && n.length <= 24 && !/[.#$/\[\]:"\\\n\r]/.test(n);
 }
 
-function exigirAuth() {
-  if (!auth.currentUser) throw new Error("Faça login primeiro.");
-}
+const epochAgora = () => Math.floor(Date.now() / 1000);
 
-function epochAgora() {
-  return Math.floor(Date.now() / 1000);
-}
-
+// ---- comandos voláteis (ESP) ----
 async function enviar(device, valor) {
   if (!device) throw new Error("Informe o dispositivo.");
-  exigirAuth();
   await set(ref(db, caminhoComando(device)), valor);
 }
 
-export const enviarCodigo = (device, pin, nome, validadeH = 0) => {
-  if (!validarPin(pin)) throw new Error(`PIN inválido: use ${PIN_LEN} dígitos.`);
-  if (!validarNome(nome)) throw new Error("Nome inválido (1–24 letras, sem : \" ,).");
-  const vh = Math.max(0, parseInt(validadeH, 10) || 0);
-  return enviar(device, `${pin}:${nome.trim()}:${epochAgora()}:${vh}`);
-};
+// ---- metadados (Firebase) ----
+export const assinarPessoas = (device, cb) =>
+  onValue(ref(db, caminhoPessoas(device)), (snap) => cb(normalizarPessoas(snap.val())));
 
-export const renovarCodigo = (device, nome, pinNovo) => {
-  if (!nome) throw new Error("Nome inválido.");
-  if (!validarPin(pinNovo)) throw new Error(`Novo PIN inválido: use ${PIN_LEN} dígitos.`);
-  return enviar(device, `RENOVAR:${nome}:${pinNovo}:${epochAgora()}`);
-};
-
-export const excluirCodigo = (device, nome) => {
-  if (!nome) throw new Error("Nome inválido.");
-  return enviar(device, `DEL:${nome}`);
-};
-
-export const alternarBloqueio = (device, nome, bloquear) => {
-  if (!nome) throw new Error("Nome inválido.");
-  return enviar(device, `${bloquear ? "BLOQ" : "LIB"}:${nome}`);
-};
-
-export const limparChaves = (device) => enviar(device, COMANDO_LIMPAR);
-
-// Resumo publicado pelo ESP (nomes+datas, nunca o PIN). O ESP grava como
-// string JSON; aqui normalizamos para objeto (aceita os dois formatos).
-// Retorna unsubscribe.
-export const assinarResumo = (device, cb) =>
-  onValue(ref(db, caminhoResumo(device)), (snap) => cb(normalizarResumo(snap.val())));
-
-function normalizarResumo(v) {
-  if (typeof v === "string") {
-    try {
-      v = JSON.parse(v);
-    } catch {
-      return null;
-    }
-  }
-  if (!v || typeof v !== "object") return null;
-  const chaves = Array.isArray(v.chaves)
-    ? v.chaves
-        .filter((c) => c && typeof c.nome === "string")
-        .map((c) => ({
-          nome: c.nome,
-          criadaEm: c.criadaEm > 0 ? c.criadaEm : 0,
-          validadeH: c.validadeH > 0 ? c.validadeH : 0,
-          ativa: c.ativa !== 0,
-        }))
-    : [];
+function normalizarPessoas(v) {
+  if (!v || typeof v !== "object") return { total: 0, chaves: [] };
+  const chaves = Object.entries(v)
+    .filter(([, p]) => p && typeof p.nome === "string")
+    .map(([id, p]) => ({
+      id,
+      nome: p.nome,
+      criadaEm: p.criadaEm > 0 ? p.criadaEm : 0,
+      validadeH: p.validadeH > 0 ? p.validadeH : 0,
+      ativa: p.ativa !== false,
+    }));
   return { total: chaves.length, chaves };
 }
 
-// true se expirada (só computável com data de cadastro + validade).
-export const isExpirada = (item, agora = Math.floor(Date.now() / 1000)) =>
+export const isExpirada = (item, agora = epochAgora()) =>
   !!item && item.ativa && item.validadeH > 0 && item.criadaEm > 0 &&
   agora > item.criadaEm + item.validadeH * 3600;
 
@@ -108,37 +60,76 @@ export const statusDe = (item, agora) => {
   return "ativa";
 };
 
+export const formatarData = (epoch) =>
+  epoch > 0 ? new Date(epoch * 1000).toLocaleString("pt-BR") : "—";
+
 export const formatarValidade = (h) => {
   if (!(h > 0)) return "sem expiração";
   if (h < 24) return `${h}h`;
   return `${Math.round(h / 24)} dias`;
 };
 
-// Aguarda o ESP reagir (resumo mudar) e APAGA o comando —
-// PIN não permanece no database nem em caso de falha (timeout 45s).
-// Retorna "ok" (confirmado) ou "timeout" (apagado sem confirmação).
-export const aguardarReacaoEApagar = (device, resumoAnterior, timeoutMs = 45000) =>
+// ---- operações (metadados + comando) ----
+async function gravarMeta(device, nome, meta) {
+  await set(ref(db, `${caminhoPessoas(device)}/${nome}`), { nome, ...meta });
+}
+
+export async function cadastrar(device, pin, nome, validadeH) {
+  if (!validarPin(pin)) throw new Error(`PIN inválido: use ${PIN_LEN} dígitos.`);
+  if (!validarNome(nome)) throw new Error('Nome inválido (1–24, sem . # $ / [ ] : " ,).');
+  const n = nome.trim();
+  const vh = Math.max(0, parseInt(validadeH, 10) || 0);
+  await gravarMeta(device, n, { criadaEm: epochAgora(), validadeH: vh, ativa: true });
+  await enviar(device, `${pin}:${n}`);
+}
+
+export async function renovar(device, nome, pinNovo) {
+  if (!validarPin(pinNovo)) throw new Error(`Novo PIN inválido: use ${PIN_LEN} dígitos.`);
+  await update(ref(db, `${caminhoPessoas(device)}/${nome}`), { criadaEm: epochAgora() });
+  await enviar(device, `RENOVAR:${nome}:${pinNovo}`);
+}
+
+export async function alternarBloqueio(device, nome, bloquear) {
+  await update(ref(db, `${caminhoPessoas(device)}/${nome}`), { ativa: !bloquear });
+  await enviar(device, `${bloquear ? "BLOQ" : "LIB"}:${nome}`);
+}
+
+export async function excluir(device, nome) {
+  await remove(ref(db, `${caminhoPessoas(device)}/${nome}`));
+  await enviar(device, `DEL:${nome}`);
+}
+
+export async function limpar(device) {
+  await remove(ref(db, caminhoPessoas(device)));
+  await enviar(device, COMANDO_LIMPAR);
+}
+
+// Bloqueia no ESP as expiradas (a página aplica a expiração ao carregar).
+export async function bloquearExpiradas(device, chaves, agora = epochAgora()) {
+  for (const c of chaves) {
+    if (isExpirada(c, agora)) await alternarBloqueio(device, c.nome, true);
+  }
+}
+
+// Aguarda o ESP consumir (o nó comandos/{device} vira null). Em timeout,
+// apaga o comando à força — o PIN não permanece no database.
+export const aguardarConsumo = (device, timeoutMs = 45000) =>
   new Promise((resolve) => {
-    const antes = JSON.stringify(resumoAnterior ?? null);
     let feito = false;
     const finalizar = (r) => {
       if (feito) return;
       feito = true;
       clearTimeout(timer);
       unsub();
-      remove(ref(db, caminhoComando(device))).catch(() => {});
+      if (r === "timeout") remove(ref(db, caminhoComando(device))).catch(() => {});
       resolve(r);
     };
     const timer = setTimeout(() => finalizar("timeout"), timeoutMs);
     const unsub = onValue(
-      ref(db, caminhoResumo(device)),
+      ref(db, caminhoComando(device)),
       (snap) => {
-        const atual = normalizarResumo(snap.val());
-        if (JSON.stringify(atual) !== antes) finalizar("ok");
+        if (snap.val() === null) finalizar("ok");
       },
       () => finalizar("timeout"),
     );
   });
-
-export const formatarData = (epoch) =>
-  epoch > 0 ? new Date(epoch * 1000).toLocaleString("pt-BR") : "—";

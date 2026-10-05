@@ -9,7 +9,6 @@
     {
       "imports": {
         "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
         "firebase/database": "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
       }
     }
@@ -59,8 +58,8 @@
       </form>
       <p class="dica">Envie um por vez e aguarde confirmar antes do próximo. Expiradas são bloqueadas sozinhas ao carregar.</p>
 
-      <h2>Chaves no ESP <span id="count" class="count"></span></h2>
-      <p id="resumo-info" class="dica">Carregando do ESP…</p>
+      <h2>Chaves cadastradas <span id="count" class="count"></span></h2>
+      <p id="resumo-info" class="dica">Carregando…</p>
       <div class="tabela-rolagem">
         <table>
           <thead>
@@ -69,7 +68,7 @@
           <tbody id="chaves-tbody"></tbody>
         </table>
       </div>
-      <p class="dica">O PIN nunca volta do ESP: renovar/excluir usam o nome.</p>
+      <p class="dica">Metadados ficam no Firebase; o PIN nunca é armazenado nem devolvido.</p>
     </section>
 
     <section id="status" class="status" aria-live="polite">Conectando…</section>
@@ -77,9 +76,9 @@
     <details>
       <summary>Como funciona</summary>
       <ol>
-        <li>Ao enviar, a página grava <code>PIN:nome</code> em <code>comandos/{dispositivo}</code> (último comando vence — um por vez).</li>
-        <li>O ESP32 recebe via stream, cadastra na tabela local (RAM+NVS) e <strong>apaga o nó</strong> em seguida. <em>Renovar</em> troca o PIN; <em>Apagar</em> remove uma chave; <em>LIMPAR</em> zera tudo.</li>
-        <li>A página lê de volta só o <strong>resumo</strong> (<code>resumo/{dispositivo}</code>: nomes + datas, nunca o PIN). A abertura é <strong>somente no teclado</strong>, digitando o PIN + <code>#</code>.</li>
+        <li>Ao enviar, a página grava os <strong>metadados</strong> em <code>pessoas/{dispositivo}/{nome}</code> (nome, data, validade, status) e o comando <code>PIN:nome</code> em <code>comandos/{dispositivo}</code>.</li>
+        <li>O ESP32 recebe via stream, cadastra o PIN na tabela local (RAM+NVS) e <strong>apaga o comando</strong> — o PIN não permanece no database.</li>
+        <li>A página lista os metadados do Firebase e bloqueia (<code>BLOQ</code>) as chaves vencidas. A abertura é <strong>somente no teclado</strong>, digitando o PIN + <code>#</code>.</li>
       </ol>
     </details>
   </main>

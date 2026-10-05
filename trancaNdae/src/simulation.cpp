@@ -26,7 +26,7 @@ void simulation_loop()
 
     if (ultimoEstadoBotao == HIGH && estadoAtual == LOW) // borda de descida
     {
-        senhas_adicionar("1234", "Teste Wokwi", 0);
+        senhas_adicionar("1234", "Teste Wokwi");
 
         Serial.println("[WOKWI] PIN de teste cadastrado: 1234");
         mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");

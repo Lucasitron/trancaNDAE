@@ -23,17 +23,20 @@ Telas: **Wi-Fi** (rede, IP, RSSI), **Firebase** (rede/auth/stream),
 
 ## Cadastrar chaves (página web, sem login)
 
-A página usa auth anônima automática (vale nas Rules `auth != null`).
-Sem login, quem abre a página pode enviar comandos — mantenha-a em
-rede/hospedagem restrita.
+A página não usa login; os nós `comandos`/`pessoas` estão com Rules
+públicas (`true`) para funcionar sem configuração. **Risco:** quem tiver
+a URL controla a tranca — hospede a página em local restrito ou volte o
+login + Rules por UID/`auth != null`.
 
 1. Dispositivo + **nome** (etiqueta única) + PIN de 4 dígitos + validade.
-2. Um comando por vez: a página aguarda o ESP reagir e **apaga o comando**
-   (confirmado ou após 45s sem resposta — o PIN não permanece no database).
-3. A tabela **carrega do ESP** sozinha (resumo: metadados, nunca o PIN).
-   *Renovar* troca o PIN; *Bloquear/Liberar* alterna o acesso sem apagar;
-   *Excluir* remove uma; **Apagar chaves** zera tudo. Expiradas são
-   bloqueadas automaticamente ao carregar a página.
+2. Ao enviar, a página grava os **metadados no Firebase**
+   (`pessoas/{device}/{nome}`: nome, data, validade, status) e o comando
+   `PIN:nome` em `comandos/{device}`. O ESP consome e **apaga o comando**
+   (confirmado quando o nó vira `null`, ou após 45s) — o PIN nunca fica
+   armazenado.
+3. A tabela lê os metadados do Firebase e **bloqueia as expiradas** ao
+   carregar. *Renovar* troca o PIN e atualiza a data; *Bloquear/Liberar*
+   alterna o status; *Excluir* remove; **Apagar chaves** zera tudo.
 
 Nada de senha fica no database: o ESP apaga o comando após consumir.
 Sem Wi-Fi, a tranca opera com as chaves em cache (NVS).
