@@ -45,16 +45,26 @@
           <input id="pin-enviar" type="text" inputmode="numeric" autocomplete="off" required
                  minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="Ex.: 4829" />
         </div>
+        <div>
+          <label for="validade-enviar">Validade</label>
+          <select id="validade-enviar">
+            <option value="2">2 horas</option>
+            <option value="12" selected>12 horas</option>
+            <option value="24">24 horas</option>
+            <option value="168">7 dias</option>
+            <option value="0">Sem expiração</option>
+          </select>
+        </div>
         <button type="submit">Enviar para a tranca</button>
       </form>
-      <p class="dica">Envie um por vez e aguarde o display do ESP confirmar antes do próximo.</p>
+      <p class="dica">Envie um por vez e aguarde confirmar antes do próximo. Expiradas são bloqueadas sozinhas ao carregar.</p>
 
       <h2>Chaves no ESP <span id="count" class="count"></span></h2>
       <p id="resumo-info" class="dica">Carregando do ESP…</p>
       <div class="tabela-rolagem">
         <table>
           <thead>
-            <tr><th>Nome</th><th>Cadastrada em</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Cadastrada em</th><th>Validade</th><th>Status</th><th>Ações</th></tr>
           </thead>
           <tbody id="chaves-tbody"></tbody>
         </table>

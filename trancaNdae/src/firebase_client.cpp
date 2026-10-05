@@ -48,6 +48,9 @@ RealtimeDatabase Database;
 static bool streamIniciado = false;
 static unsigned long ultimoResumo = 0;
 static bool resumoPendente = false;
+// Apagar o nó é feito NO LOOP (fora do callback): a lib não admite
+// iniciar tarefa async dentro do próprio callback (reentrância = reboot).
+static bool apagarComandoPendente = false;
 
 // Declaradas antes do callback (definições abaixo).
 static void publicarResumo();
@@ -101,9 +104,10 @@ void processData(AsyncResult &aResult)
     String valor = stream.to<String>();
     valor.trim();
 
-    // Consome e APAGA o nó: comando volátil, não permanece no database.
-    Database.remove(deleteClient, COMANDO_UNICO_PATH, processData, "deleteTask");
-
+    // Marca para apagar no loop (ver processarFirebase). O comando é
+    // processado AGORA (só RAM/NVS, sem reentrância) e o nó some em seguida:
+    // janela mínima de exposição no database.
+    apagarComandoPendente = true;
     consumirComando(valor);
 }
 
@@ -163,6 +167,15 @@ static void consumirComando(const String &valor)
         return;
     }
 
+    if ((f[0] == "BLOQ" || f[0] == "LIB") && f[1].length() > 0)
+    {
+        if (senhas_bloquear(f[1], f[0] == "BLOQ"))
+            resumoPendente = true;
+        else
+            tlogln("BLOQ/LIB ignorado (nome inexistente/sem mudança).");
+        return;
+    }
+
     if (f[0] == "RENOVAR" && f[1].length() > 0 && f[2].length() > 0)
     {
         uint32_t ep = (f[3].length() > 0) ? (uint32_t)f[3].toInt() : 0;
@@ -173,9 +186,10 @@ static void consumirComando(const String &valor)
         return;
     }
 
-    // Cadastro: "PIN:nome[:epoch]" (nome pode ser vazio).
+    // Cadastro: "PIN:nome[:epoch[:validadeH]]" (nome obrigatório).
     uint32_t ep = (f[2].length() > 0) ? (uint32_t)f[2].toInt() : 0;
-    if (senhas_adicionar(f[0], f[1], ep))
+    uint16_t vh = (f[3].length() > 0) ? (uint16_t)f[3].toInt() : 0;
+    if (senhas_adicionar(f[0], f[1], ep, vh))
         resumoPendente = true;
     else
         tlogln("Comando remoto ignorado (formato/duplicado/cheio).");
@@ -223,6 +237,14 @@ void processarFirebase()
         resumoPendente = false;
         ultimoResumo = millis();
         publicarResumo();
+    }
+
+    // Apaga o comando JÁ consumido (fora do callback, sem reentrância).
+    // Garante: PIN não permanece no database.
+    if (streamIniciado && app.ready() && apagarComandoPendente)
+    {
+        apagarComandoPendente = false;
+        Database.remove(deleteClient, COMANDO_UNICO_PATH, processData, "deleteTask");
     }
 }
 
