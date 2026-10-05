@@ -9,6 +9,10 @@ export class ComandoView {
     this.pin = $("pin-enviar");
     this.validade = $("validade-enviar");
     this.btnLimpar = $("btn-limpar-tudo");
+    this.formWifi = $("form-wifi");
+    this.wifiSsid = $("wifi-ssid");
+    this.wifiSenha = $("wifi-senha");
+    this.btnWifiOff = $("btn-wifi-off");
     this.tbody = $("chaves-tbody");
     this.count = $("count");
     this.atualizado = $("resumo-info");
@@ -37,6 +41,17 @@ export class ComandoView {
 
   onLimparTudo(handler) {
     this.btnLimpar.addEventListener("click", handler);
+  }
+
+  onSalvarWifi(handler) {
+    this.formWifi.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      handler(this.deviceAtual(), this.wifiSsid.value.trim(), this.wifiSenha.value);
+    });
+  }
+
+  onDesativarWifi(handler) {
+    this.btnWifiOff.addEventListener("click", handler);
   }
 
   onAcaoTabela(handler) {

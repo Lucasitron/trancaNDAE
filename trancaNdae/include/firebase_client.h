@@ -16,6 +16,8 @@
 //   "BLOQ:nome" / "LIB:nome"       -> bloqueia / libera (sem apagar)
 //   "DEL:nome"                     -> remove uma chave
 //   "LIMPAR"                       -> apaga toda a tabela local
+//   "WIFI2:ssid:senha"             -> salva Wi-Fi secundário e reconecta
+//   "WIFI2OFF"                     -> desativa o secundário (só padrão)
 // Metadados (nome, data, validade, status) ficam em /pessoas/{device},
 // gerenciados pela PÁGINA — o ESP não publica resumo.
 #define COMANDO_UNICO_PATH "/comandos/dispositivo1"
@@ -25,7 +27,10 @@
 void iniciarFirebase();
 void processarFirebase(); // Chame no loop() para manter o app vivo
 
-// true quando autenticado (stream ativo). Para o modo status.
+// true quando autenticado (porta de entrada do modo status).
 bool firebase_pronto();
+
+// Força recriação do stream na próxima volta (após queda/reconexão Wi-Fi).
+void firebase_reset_stream();
 
 #endif

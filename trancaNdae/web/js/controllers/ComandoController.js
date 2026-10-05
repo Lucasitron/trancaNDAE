@@ -6,11 +6,14 @@ import {
   assinarPessoas,
   bloquearExpiradas,
   cadastrar,
+  desativarWifi2,
   excluir,
   formatarData,
   formatarValidade,
+  isExpirada,
   limpar,
   renovar,
+  salvarWifi2,
   statusDe,
 } from "../models/ComandoModel.js";
 
@@ -27,6 +30,10 @@ export class ComandoController {
     this.view.onAcaoTabela((acao, nome, bloqueada) =>
       this.acao(acao, nome, bloqueada),
     );
+    this.view.onSalvarWifi((device, ssid, senha) =>
+      this.salvarWifi(device, ssid, senha),
+    );
+    this.view.onDesativarWifi(() => this.desativarWifi());
     this.view.onDeviceChange((device) => {
       this.higieneFeita = false;
       this.assinar(device);
@@ -110,5 +117,21 @@ export class ComandoController {
     if (!device) return this.view.erro(new Error("Informe o dispositivo."));
     if (!confirm(`Apagar TODAS as chaves em "${device}"?`)) return;
     await this.executar(device, "Limpeza total.", () => limpar(device));
+  }
+
+  async salvarWifi(device, ssid, senha) {
+    if (!device) return this.view.erro(new Error("Informe o dispositivo."));
+    await this.executar(device, "Wi-Fi secundário salvo.", () =>
+      salvarWifi2(device, ssid, senha),
+    );
+  }
+
+  async desativarWifi() {
+    const device = this.view.deviceAtual();
+    if (!device) return this.view.erro(new Error("Informe o dispositivo."));
+    if (!confirm("Desativar o Wi-Fi secundário? (volta só o padrão)")) return;
+    await this.executar(device, "Secundário desativado.", () =>
+      desativarWifi2(device),
+    );
   }
 }

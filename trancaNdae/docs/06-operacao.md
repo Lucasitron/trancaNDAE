@@ -48,12 +48,17 @@ Sem Wi-Fi, a tranca opera com as chaves em cache (NVS).
 - Upload sem cabo: `upload_protocol = espota` no `platformio.ini`
   (primeiras 2 gravações via USB). Senha em `OTA_PASSWORD`.
 
-## Rede (IP fixo multi-perfil)
+## Rede (padrão + secundário)
 
-O ESP tenta nesta ordem: fixo `10.0.0.150` (gateway `.1`), fixo
-`192.168.1.150` (gateway `.1`), e DHCP como reserva. Perfis em
-`include/secrets.h` (`STATIC_IP/GATEWAY`, `STATIC_IP2/GATEWAY2`,
-`IP_FALLBACK_DHCP`). Use IPs fora do range DHCP do roteador.
+- O ESP usa o **Wi-Fi padrão** gravado nele (`secrets.h`).
+- No menu recolhível **Wi-Fi do ESP** da página dá para salvar um
+  **secundário** (SSID + senha): se o padrão falhar no boot, ele tenta o
+  secundário sozinho; desativando, volta a usar só o padrão.
+- IP: tenta fixo por sub-rede (`10.0.0.x` ou `192.168.1.x`) com os
+  gateway/DNS do DHCP; fora disso mantém DHCP. Offline, tenta de novo a
+  cada 60s.
+- **Sem nenhuma rede ativa o display mostra `WiFi OFF!`** no lugar do
+  `Bem vindo!` (a fechadura segue operando com as chaves em cache).
 
 ## Credenciais (`include/secrets.h`, gitignored)
 
