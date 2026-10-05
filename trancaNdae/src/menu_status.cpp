@@ -63,7 +63,7 @@ static void linhasStatus(uint8_t tela, String out[6], uint8_t &nLinhas)
         snprintf(buf, sizeof(buf), "Heap: %u", ESP.getFreeHeap());
         out[2] = String(buf);
         out[3] = fechadura_aberta() ? "Rele: ABERTO" : "Rele: fechado";
-        out[4] = "Reset: 0000 + *";
+        out[4] = "Reinicia: 0000+*";
         out[5] = "Status: admin + *";
         break;
     }

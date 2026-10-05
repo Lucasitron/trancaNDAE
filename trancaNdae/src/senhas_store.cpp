@@ -12,11 +12,17 @@ static bool s_mudou = false;
 
 static Preferences s_prefs;
 
+// PIN reservado para reinício (fechadura.h: CODIGO_RESET). Nunca cadastrar:
+// abriria ambiguidade com o reinício (0000 + '*').
+static const char *PIN_RESERVADO = "0000";
+
 // PIN válido: PIN_LEN dígitos 0-9.
 static bool eh_pin(const String &s)
 {
     if (s.length() != PIN_LEN)
         return false;
+    if (s == PIN_RESERVADO)
+        return false; // reservado
     for (int i = 0; i < PIN_LEN; i++)
     {
         if (s[i] < '0' || s[i] > '9')

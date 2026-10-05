@@ -1,66 +1,27 @@
-# 🧪 Módulo Simulation
+# Módulo Simulation (Wokwi)
 
-Encapsula toda a lógica de simulação do **Wokwi**, isolando-a do código de produção.
+Isola a lógica de simulação do **Wokwi** do código de produção.
 
-## Como Funciona
+## Como funciona
 
-- Se `WOKWI_SIM` estiver definido no `build_flags`, o corpo das funções é compilado.
-- Caso contrário, as funções são **no-op** (vazias) e não ocupam espaço no binário final.
-- O `main.ino` chama `simulation_setup()` e `simulation_loop()` incondicionalmente.
+- Com `WOKWI_SIM` definido, o corpo das funções é compilado; sem ele,
+  são **no-op** (não ocupam espaço no binário).
+- Usa `display.h` (`mostrarNoLCD`) e `senhas_store.h` — sem `extern`
+  manual e sem HMAC/buzzer.
 
 ## API
 
 ### `void simulation_setup()`
-Inicializa o botão TEST (`INPUT_PULLUP`) e o LED de status. Chamada no `setup()` principal.
+Botão TEST (`INPUT_PULLUP`) + LED de status. Chamada no `setup()`.
 
 ### `void simulation_loop()`
-Processa:
-1. **Botão TEST** → gera token HMAC de `"ABRIR"` com chave `"1234"` e salva na NVS.
+1. **Botão TEST** (borda de descida) → `senhas_adicionar("1234", "Teste Wokwi")`
+   e avisa no display.
 2. **LED de status** → espelha o estado do relé.
 
-## Pinos (definidos em `pins.h`)
+## Pinos (`pins.h`, só com `WOKWI_SIM`)
 
-| Pino | GPIO | Função |
+| Define | GPIO | Função |
 | :--- | :--- | :--- |
-| `PINO_BOTAO_TESTE` | 5 | Botão que simula o recebimento do token |
-| `PINO_LED_STATUS` | 2 | LED que espelha o relé |
-
-## Dependências Externas
-
-O módulo usa `extern` para referenciar funções do `main.ino`:
-
-```cpp
-extern String hmacSha256(const String &mensagem, const String &chave);
-extern void mostrarNoLCD(const String &status, const String &mensagem,
-                         const String &teclado, const String &rodape);
-```
-
-> ⚠️ **Importante:** essas funções **não podem ser `static`** no `main.ino`.
-
-## Exemplo de Uso
-
-```cpp
-#include "simulation.h"
-
-void setup() {
-    simulation_setup();  // no-op em produção
-}
-
-void loop() {
-    simulation_loop();   // no-op em produção
-}
-```
-
-## Chave de Teste
-
-| Parâmetro | Valor |
-| :--- | :--- |
-| Palavra-comando | `ABRIR` |
-| PIN de teste | `1234` |
-| Token gerado | `HMAC-SHA256("ABRIR", "1234")` (4 hex) |
-
-Para alterar, edite a linha em `simulation.cpp`:
-
-```cpp
-String tokenTeste = hmacSha256("ABRIR", "1234");
-```
+| `PINO_BOTAO_TESTE` | 5 | Simula recebimento de comando/chave |
+| `PINO_LED_STATUS` | 2 | Espelha o relé |

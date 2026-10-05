@@ -106,10 +106,10 @@ void loop()
 
     if (tecla == '*')
     {
-        if (pinDigitado == CODIGO_RESET) // 0000 + '*' = reset de fábrica
+        if (pinDigitado == CODIGO_RESET) // 0000 + '*' = só reinicia
         {
             pinDigitado = "";
-            executarResetFabrica(); // não retorna (reinicia)
+            executarReinicio(); // não retorna (reinicia)
             return;
         }
         if (pinDigitado == ADMIN_PASSWORD) // admin + '*' = modo status
