@@ -5,6 +5,7 @@
 #include "pins.h"
 #include "senhas_store.h"
 #include "telnet_log.h"
+#include "wifi_manager.h"
 
 static LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 static bool lcdOK = false;
@@ -138,12 +139,13 @@ void display_mostrar4(const String &l0, const String &l1,
 
 void telaAguardando()
 {
-    // Layout: título | instrução | zona de digitação | dica.
-    // (Qtd. de chaves saiu daqui: está no menu status, tela "Chaves".)
+    // Sem Wi-Fi: alerta no lugar do "Bem vindo!".
+    String titulo = wifiConectado ? "Bem vindo!" : "WiFi OFF!";
+    String dica = wifiConectado ? "Confirme com #" : "Sem rede!";
     if (senhas_total() > 0)
-        mostrarNoLCD("Bem vindo!", "Digite a senha:", "", "Confirme com #");
+        mostrarNoLCD(titulo, "Digite a senha:", "", dica);
     else
-        mostrarNoLCD("Bem vindo!", "Sem chaves!", "", "Solicite o envio");
+        mostrarNoLCD(titulo, "Sem chaves!", "", wifiConectado ? "Solicite o envio" : "Sem rede!");
 }
 
 String mascarar(const String &s)

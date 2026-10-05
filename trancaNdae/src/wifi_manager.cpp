@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include <Preferences.h>
 
 #include "wifi_manager.h"
+#include "firebase_client.h"
 #include "secrets.h"
 #include "telnet_log.h"
 
@@ -11,6 +13,61 @@ const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
 
 volatile bool wifiConectado = false;
+String wifiPerfil = "";
+
+// Wi-Fi secundário (NVS "wifi": ssid/pass/on). Configurado pela página.
+static Preferences wifiPrefs;
+
+bool wifi2_ativo()
+{
+    wifiPrefs.begin("wifi", true);
+    bool on = wifiPrefs.isKey("on") && wifiPrefs.getUChar("on", 0) != 0 &&
+              wifiPrefs.isKey("ssid") && wifiPrefs.getString("ssid", "").length() > 0;
+    wifiPrefs.end();
+    return on;
+}
+
+static bool wifi2_valido(const String &ssid, const String &pass)
+{
+    if (ssid.length() < 1 || ssid.length() > 32)
+        return false;
+    if (pass.length() > 63)
+        return false;
+    for (unsigned int i = 0; i < ssid.length(); i++)
+    {
+        char c = ssid[i];
+        if (c == ':' || c < 32 || c > 126)
+            return false;
+    }
+    for (unsigned int i = 0; i < pass.length(); i++)
+    {
+        char c = pass[i];
+        if (c == ':' || c < 32 || c > 126)
+            return false;
+    }
+    return true;
+}
+
+bool wifi2_salvar(const String &ssid, const String &pass)
+{
+    if (!wifi2_valido(ssid, pass))
+        return false;
+    wifiPrefs.begin("wifi", false);
+    wifiPrefs.putString("ssid", ssid);
+    wifiPrefs.putString("pass", pass);
+    wifiPrefs.putUChar("on", 1);
+    wifiPrefs.end();
+    tlogln("Wi-Fi secundário salvo e ATIVO.");
+    return true;
+}
+
+void wifi2_desativar()
+{
+    wifiPrefs.begin("wifi", false);
+    wifiPrefs.putUChar("on", 0);
+    wifiPrefs.end();
+    tlogln("Wi-Fi secundário DESATIVADO (só padrão).");
+}
 
 // ================= IP FIXO MULTI-REDE =================
 // Estratégia: conecta por DHCP primeiro (pega gateway/DNS corretos de
@@ -22,14 +79,14 @@ static bool mesmo24(IPAddress a, IPAddress b)
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-// Conecta via DHCP. Retorna true se WL_CONNECTED dentro do timeout.
-static bool conectarDHCP(unsigned long timeoutMs)
+// Conecta via DHCP com as credenciais dadas. Retorna true se WL_CONNECTED.
+static bool conectarDHCP(const char *rede, const char *senha, unsigned long timeoutMs)
 {
     WiFi.disconnect(true);
     delay(100);
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(OTA_HOSTNAME);
-    WiFi.begin(ssid, password);
+    WiFi.begin(rede, senha);
     tlog("DHCP: conectando");
     unsigned long t0 = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - t0 < timeoutMs))
@@ -41,7 +98,8 @@ static bool conectarDHCP(unsigned long timeoutMs)
 }
 
 // Reaplica IP fixo (mesmo gateway/DNS) e reconecta. true se conectou.
-static bool aplicarFixo(IPAddress ip, IPAddress gateway, IPAddress dns, IPAddress subnet)
+static bool aplicarFixo(const char *rede, const char *senha,
+                        IPAddress ip, IPAddress gateway, IPAddress dns, IPAddress subnet)
 {
     WiFi.disconnect(true);
     delay(100);
@@ -52,7 +110,7 @@ static bool aplicarFixo(IPAddress ip, IPAddress gateway, IPAddress dns, IPAddres
         tlogln("Falha WiFi.config; mantendo DHCP.");
         return false;
     }
-    WiFi.begin(ssid, password);
+    WiFi.begin(rede, senha);
     tlog("IP fixo: reconectando em ");
     tlogln(ip.toString());
     unsigned long t0 = millis();
@@ -64,53 +122,76 @@ static bool aplicarFixo(IPAddress ip, IPAddress gateway, IPAddress dns, IPAddres
     return WiFi.status() == WL_CONNECTED;
 }
 
+// Tenta UMA rede (DHCP para descobrir + fixo se a sub-rede casar).
+// fixoRef: IP de referência do perfil (STATIC_IP / STATIC_IP2).
+static bool tentarRede(const char *rotulo, const char *rede, const char *senha,
+                       IPAddress fixoRef)
+{
+    tlog("Rede ");
+    tlog_raw(rotulo);
+    tlog_raw(" (");
+    tlog_raw(rede);
+    tlogln("):");
+
+    if (!conectarDHCP(rede, senha, 10000))
+        return false;
+
+#if USE_STATIC_IP
+    IPAddress lease = WiFi.localIP();
+    if (mesmo24(lease, fixoRef))
+    {
+        IPAddress gw = WiFi.gatewayIP();
+        IPAddress dns = WiFi.dnsIP();
+        IPAddress subnet = WiFi.subnetMask();
+        tlog("Sub-rede do perfil. Aplicando fixo: ");
+        tlogln(fixoRef.toString());
+        if (!aplicarFixo(rede, senha, fixoRef, gw, dns, subnet))
+        {
+            tlogln("Falha no IP fixo; voltando para DHCP.");
+            if (!conectarDHCP(rede, senha, 8000))
+                return false;
+        }
+    }
+    else
+    {
+        tlogln("Fora do perfil fixo; mantendo DHCP.");
+    }
+#endif
+    return true;
+}
+
 // ================= CONEXÃO WI-FI =================
 void conectarWiFi()
 {
     tlogln("\nIniciando conexão Wi-Fi...");
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(OTA_HOSTNAME);
+    wifiPerfil = "";
 
-    // 1) DHCP: descobre a rede real (gateway/DNS corretos).
-    bool ok = conectarDHCP(12000);
+    // 1) Padrão (secrets.h) — sempre primeiro.
+    bool ok = tentarRede("padrao", ssid, password, IPAddress(STATIC_IP));
 
-#if USE_STATIC_IP
-    if (ok)
+    // 2) Secundário (NVS) — só se ativo e o padrão falhou.
+    if (!ok && wifi2_ativo())
     {
-        IPAddress lease = WiFi.localIP();
-        IPAddress gw = WiFi.gatewayIP();
-        IPAddress dns = WiFi.dnsIP();
-        IPAddress subnet = WiFi.subnetMask();
-        IPAddress alvo;
-
-        if (mesmo24(lease, IPAddress(STATIC_IP)))
-            alvo = IPAddress(STATIC_IP); // perfil A (10.0.0.x)
-#if defined(STATIC_IP2)
-        else if (mesmo24(lease, IPAddress(STATIC_IP2)))
-            alvo = IPAddress(STATIC_IP2); // perfil B (192.168.1.x)
-#endif
-        else
+        wifiPrefs.begin("wifi", true);
+        String s2 = wifiPrefs.getString("ssid", "");
+        String p2 = wifiPrefs.getString("pass", "");
+        wifiPrefs.end();
+        if (tentarRede("secundaria", s2.c_str(), p2.c_str(), IPAddress(STATIC_IP2)))
         {
-            tlogln("Rede fora dos perfis fixos; mantendo DHCP.");
-            alvo = IPAddress(0, 0, 0, 0);
-        }
-
-        if (alvo != IPAddress(0, 0, 0, 0))
-        {
-            tlog("Sub-rede detectada. Aplicando IP fixo do perfil: ");
-            tlogln(alvo.toString());
-            if (!aplicarFixo(alvo, gw, dns, subnet))
-            {
-                tlogln("Falha no IP fixo; voltando para DHCP.");
-                ok = conectarDHCP(10000);
-            }
+            ok = true;
+            wifiPerfil = "secundario";
         }
     }
-#endif
+    if (ok && wifiPerfil.length() == 0)
+        wifiPerfil = "padrao";
 
     if (ok)
     {
         tlogln("\nWi-Fi Conectado com sucesso!");
+        tlog("Perfil: ");
+        tlogln(wifiPerfil);
         tlog("Endereço IP: ");
         tlogln(WiFi.localIP().toString());
         tlog("Gateway: ");
@@ -120,6 +201,15 @@ void conectarWiFi()
     {
         tlogln("\nFalha ao conectar no Wi-Fi. Verifique credenciais/rede.");
     }
+}
+
+// Reconecta (padrão -> secundário) e rearma OTA. Para retry offline.
+void wifi_reconectar()
+{
+    tlogln("Tentando reconectar Wi-Fi...");
+    conectarWiFi();
+    if (wifiConectado)
+        iniciarOTA(); // rearma o UDP após a queda
 }
 
 // ================= CALLBACK DE EVENTOS WI-FI =================
@@ -140,6 +230,8 @@ void eventoWiFi(WiFiEvent_t event)
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
         tlogln("❌ Wi-Fi Desconectado!");
         wifiConectado = false;
+        wifiPerfil = "";
+        firebase_reset_stream(); // stream SSE morreu: recria ao voltar
         break;
 
     default:

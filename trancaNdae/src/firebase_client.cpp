@@ -18,6 +18,7 @@
 #include "firebase_client.h"
 #include "senhas_store.h"
 #include "telnet_log.h"
+#include "wifi_manager.h"
 
 #include "secrets.h"
 
@@ -48,6 +49,8 @@ static bool streamIniciado = false;
 // Apagar o nó é feito NO LOOP (fora do callback): a lib não admite
 // iniciar tarefa async dentro do próprio callback (reentrância = reboot).
 static bool apagarComandoPendente = false;
+// Idem para reconectar o Wi-Fi (bloqueia ~20s): via flag, no loop.
+static bool wifiReconfig = false;
 
 // Declarada antes do callback (definição abaixo).
 static void consumirComando(const String &valor);
@@ -150,6 +153,22 @@ static void consumirComando(const String &valor)
         return;
     }
 
+    if (f[0] == "WIFI2OFF")
+    {
+        wifi2_desativar();
+        return;
+    }
+
+    if (f[0] == "WIFI2" && f[1].length() > 0)
+    {
+        // f[2] pode ser "" (rede aberta). Aplica no loop (bloqueia ~20s).
+        if (wifi2_salvar(f[1], f[2]))
+            wifiReconfig = true;
+        else
+            tlogln("WIFI2 ignorado (SSID 1-32 / senha 0-63, sem ':').");
+        return;
+    }
+
     if ((f[0] == "BLOQ" || f[0] == "LIB") && f[1].length() > 0)
     {
         if (!senhas_bloquear(f[1], f[0] == "BLOQ"))
@@ -207,10 +226,23 @@ void processarFirebase()
         apagarComandoPendente = false;
         Database.remove(maintClient, COMANDO_UNICO_PATH, processData, "deleteTask");
     }
+
+    // Aplica troca de Wi-Fi pedida pela página (fora do callback).
+    if (wifiReconfig)
+    {
+        wifiReconfig = false;
+        wifi_reconectar();
+    }
 }
 
 // Pronto quando autenticado (porta de entrada do modo status).
 bool firebase_pronto()
 {
     return app.ready();
+}
+
+// Força recriação do stream na próxima volta (após queda/reconexão Wi-Fi).
+void firebase_reset_stream()
+{
+    streamIniciado = false;
 }

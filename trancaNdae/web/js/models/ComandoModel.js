@@ -24,6 +24,19 @@ export function validarNome(nome) {
   return n.length > 0 && n.length <= 24 && !/[.#$/\[\]:"\\\n\r]/.test(n);
 }
 
+export function validarWifi(ssid, senha) {
+  const s = (ssid ?? "").trim();
+  if (s.length < 1 || s.length > 32 || /[:\n\r]/.test(s)) return false;
+  const p = senha ?? "";
+  if (p.length > 63 || /[:\n\r]/.test(p)) return false;
+  if (p.length > 0 && p.length < 8) return false; // WPA mínimo 8 (vazio = aberta)
+  for (const c of s + p) {
+    const o = c.codePointAt(0);
+    if (o < 32 || o > 126) return false;
+  }
+  return true;
+}
+
 const epochAgora = () => Math.floor(Date.now() / 1000);
 
 // ---- comandos voláteis (ESP) ----
@@ -102,6 +115,16 @@ export async function excluir(device, nome) {
 export async function limpar(device) {
   await remove(ref(db, caminhoPessoas(device)));
   await enviar(device, COMANDO_LIMPAR);
+}
+
+export async function salvarWifi2(device, ssid, senha) {
+  if (!validarWifi(ssid, senha))
+    throw new Error("Wi-Fi inválido: SSID 1–32, senha vazia ou 8–63 (sem ':').");
+  await enviar(device, `WIFI2:${ssid.trim()}:${senha}`);
+}
+
+export async function desativarWifi2(device) {
+  await enviar(device, "WIFI2OFF");
 }
 
 // Bloqueia no ESP as expiradas (a página aplica a expiração ao carregar).

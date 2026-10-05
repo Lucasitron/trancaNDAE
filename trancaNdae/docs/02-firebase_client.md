@@ -24,7 +24,8 @@ dele** (reentrância = reboot): só RAM/NVS aqui. `Database.remove` roda no
 `processarFirebase()`, via flag. Para strings no stream:
 - `"LIMPAR"` → `senhas_limpar()`; senha de admin → recusado;
 - `"PIN:nome"` → adicionar; `"RENOVAR:nome:novo"`, `"BLOQ:nome"`/`"LIB:nome"`,
-  `"DEL:nome"`.
+  `"DEL:nome"`, `"WIFI2:ssid:senha"` (salva secundário e reconecta),
+  `"WIFI2OFF"` (só padrão).
 O PIN é gravado só na RAM/NVS local e o nó é apagado no loop seguinte.
 
 ## Formato no Firebase

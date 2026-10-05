@@ -81,6 +81,29 @@
         <li>A página lista os metadados do Firebase e bloqueia (<code>BLOQ</code>) as chaves vencidas. A abertura é <strong>somente no teclado</strong>, digitando o PIN + <code>#</code>.</li>
       </ol>
     </details>
+
+    <details>
+      <summary>Wi-Fi do ESP (rede secundária)</summary>
+      <p class="dica">O ESP usa o <strong>Wi-Fi padrão</strong> gravado nele. Aqui você configura um
+        <strong>secundário</strong>: se o padrão falhar, ele tenta o secundário sozinho.
+        Desativando, volta a usar só o padrão.</p>
+      <form id="form-wifi" class="grade" autocomplete="off">
+        <div>
+          <label for="wifi-ssid">SSID da rede secundária</label>
+          <input id="wifi-ssid" type="text" autocomplete="off" required
+                 maxlength="32" placeholder="Ex.: MinhaRede" />
+        </div>
+        <div>
+          <label for="wifi-senha">Senha (vazio = rede aberta)</label>
+          <input id="wifi-senha" type="password" autocomplete="new-password"
+                 maxlength="63" placeholder="Mínimo 8 caracteres" />
+        </div>
+        <button type="submit">Salvar e ativar secundário</button>
+      </form>
+      <div class="barra-botoes">
+        <button id="btn-wifi-off" type="button" class="secundario">Desativar secundário (só padrão)</button>
+      </div>
+    </details>
   </main>
 
   <script type="module" src="js/app.js"></script>

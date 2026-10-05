@@ -74,6 +74,17 @@ void loop()
             telaAguardando();
     }
 
+    // Retry Wi-Fi a cada 60s offline (fora de porta aberta/status).
+    // Se voltar, o display sai do alerta sozinho na próxima mudança.
+    static unsigned long ultimoRetry = 0;
+    if (!wifiConectado && !fechadura_aberta() && !emModoStatus() &&
+        (millis() - ultimoRetry > 60000))
+    {
+        ultimoRetry = millis();
+        wifi_reconectar();
+        telaAguardando();
+    }
+
     // Teclado pausado com a porta aberta
     if (fechadura_aberta())
         return;
