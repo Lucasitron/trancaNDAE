@@ -20,33 +20,32 @@ Chamada **não-bloqueante** no `loop()`.
 ### `void processData(AsyncResult &aResult)`
 Callback unificado (eventos/debug/erros/dados). **Nunca** chama `app.loop()`
 dentro (recursão estoura a `loopTask`) e **nunca inicia tarefa async dentro
-dele** (reentrância = reboot): só RAM/NVS aqui. `Database.remove` e os `set`
-rodam no `processarFirebase()`, via flags. Para strings no stream:
-1. marca `apagarComandoPendente` e interpreta: `"LIMPAR"` → `senhas_limpar()`;
-   senha de admin → recusado; `"PIN:nome[:epoch[:validadeH]]"` → adicionar;
-   `"RENOVAR:nome:novo[:epoch]"`, `"BLOQ:nome"`/`"LIB:nome"`, `"DEL:nome"`;
-2. mutação arma `resumoPendente`; o loop publica e apaga o comando.
+dele** (reentrância = reboot): só RAM/NVS aqui. `Database.remove` roda no
+`processarFirebase()`, via flag. Para strings no stream:
+- `"LIMPAR"` → `senhas_limpar()`; senha de admin → recusado;
+- `"PIN:nome"` → adicionar; `"RENOVAR:nome:novo"`, `"BLOQ:nome"`/`"LIB:nome"`,
+  `"DEL:nome"`.
+O PIN é gravado só na RAM/NVS local e o nó é apagado no loop seguinte.
 
 ## Formato no Firebase
 
-Comando volátil (web escreve, ESP apaga no loop seguinte), string:
+Comando volátil (web escreve, ESP apaga), string:
 
 ```json
-{ "comandos": { "dispositivo1": "4829:Maria:1758760000:12" } }
+{ "comandos": { "dispositivo1": "4829:Maria" } }
 ```
 
-Resumo de leitura (ESP escreve, web lê — nunca contém o PIN):
+Metadados (gravados e lidos pela PÁGINA, nunca o PIN):
 
 ```json
-{ "resumo": { "dispositivo1": {
-  "total": 1,
-  "chaves": [{ "nome": "Maria", "criadaEm": 1758760000,
-                "validadeH": 12, "ativa": 1 }]
+{ "pessoas": { "dispositivo1": {
+  "Maria": { "nome": "Maria", "criadaEm": 1758760000,
+             "validadeH": 12, "ativa": true }
 } } }
 ```
 
-Expiração: a web bloqueia (`BLOQ`) as vencidas ao carregar a lista
-(o ESP não tem relógio); `validadeH: 0` = sem expiração.
+O ESP **não** publica nem lê metadados: só recebe comandos e guarda os PINs.
+A expiração é aplicada pela página (bloqueia via `BLOQ` ao carregar).
 
 - `"4829"` → cadastra o PIN na tabela local (máx. 20).
 - `"LIMPAR"` → zera a tabela local.

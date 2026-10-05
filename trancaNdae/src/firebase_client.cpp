@@ -23,19 +23,18 @@
 
 // ================= OBJETOS =================
 // WiFiClientSecure do core Arduino (FirebaseClient já sabe usar).
-// Um cliente POR tarefa assíncrona (a lib não permite compartilhar):
-//   auth  -> aClient | stream -> streamClient
-//   delete do comando -> deleteClient | resumo -> resumoClient
+// Cada cliente TLS consome heap (~dezenas de KB). Usamos o MÍNIMO:
+// auth (aClient) + stream (streamClient) + manutenção (maintClient, só
+// para apagar o comando). Os metadados ficam no Firebase, geridos pela
+// página — o ESP não publica resumo.
 WiFiClientSecure ssl_client;
 WiFiClientSecure stream_ssl_client;
-WiFiClientSecure delete_ssl_client;
-WiFiClientSecure resumo_ssl_client;
+WiFiClientSecure maint_ssl_client;
 
 using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client);
 AsyncClient streamClient(stream_ssl_client);
-AsyncClient deleteClient(delete_ssl_client);
-AsyncClient resumoClient(resumo_ssl_client);
+AsyncClient maintClient(maint_ssl_client);
 
 // Autenticação
 UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD, 3000);
@@ -46,14 +45,11 @@ RealtimeDatabase Database;
 
 // Stream de comandos inicia só após autenticação
 static bool streamIniciado = false;
-static unsigned long ultimoResumo = 0;
-static bool resumoPendente = false;
 // Apagar o nó é feito NO LOOP (fora do callback): a lib não admite
 // iniciar tarefa async dentro do próprio callback (reentrância = reboot).
 static bool apagarComandoPendente = false;
 
-// Declaradas antes do callback (definições abaixo).
-static void publicarResumo();
+// Declarada antes do callback (definição abaixo).
 static void consumirComando(const String &valor);
 
 // ================= CALLBACK UNIFICADO =================
@@ -111,24 +107,13 @@ void processData(AsyncResult &aResult)
     consumirComando(valor);
 }
 
-// Publica o resumo (nome+data, SEM pin) para a página acompanhar.
-static void publicarResumo()
-{
-    String json;
-    senhas_resumo_json(json);
-    Database.set(resumoClient, RESUMO_PATH, json, processData, "resumoTask");
-}
-
-// Interpreta um comando volátil (chamado após apagar o nó).
+// Interpreta um comando volátil (chamado após marcar o nó para apagar).
 static void consumirComando(const String &valor)
 {
     if (valor == COMANDO_LIMPAR)
     {
         if (senhas_limpar())
-        {
             tlogln("Comando remoto: tabela zerada.");
-            resumoPendente = true;
-        }
         else
             tlogln("Comando remoto LIMPAR: tabela já vazia.");
         return;
@@ -141,10 +126,10 @@ static void consumirComando(const String &valor)
         return;
     }
 
-    // Formato "CMD:a:b:c" — separa em até 4 campos.
-    String f[4];
+    // Formato "CMD:a:b" — separa em até 3 campos.
+    String f[3];
     int ini = 0, n = 0;
-    while (n < 4)
+    while (n < 3)
     {
         int fim = valor.indexOf(':', ini);
         if (fim < 0)
@@ -155,43 +140,32 @@ static void consumirComando(const String &valor)
         f[n++] = valor.substring(ini, fim);
         ini = fim + 1;
     }
-    while (n < 4)
+    while (n < 3)
         f[n++] = "";
 
     if (f[0] == "DEL" && f[1].length() > 0)
     {
-        if (senhas_remover_nome(f[1]))
-            resumoPendente = true;
-        else
+        if (!senhas_remover_nome(f[1]))
             tlogln("DEL ignorado (nome inexistente).");
         return;
     }
 
     if ((f[0] == "BLOQ" || f[0] == "LIB") && f[1].length() > 0)
     {
-        if (senhas_bloquear(f[1], f[0] == "BLOQ"))
-            resumoPendente = true;
-        else
+        if (!senhas_bloquear(f[1], f[0] == "BLOQ"))
             tlogln("BLOQ/LIB ignorado (nome inexistente/sem mudança).");
         return;
     }
 
     if (f[0] == "RENOVAR" && f[1].length() > 0 && f[2].length() > 0)
     {
-        uint32_t ep = (f[3].length() > 0) ? (uint32_t)f[3].toInt() : 0;
-        if (senhas_renovar(f[1], f[2], ep))
-            resumoPendente = true;
-        else
+        if (!senhas_renovar(f[1], f[2]))
             tlogln("RENOVAR ignorado (nome ausente/novo inválido).");
         return;
     }
 
-    // Cadastro: "PIN:nome[:epoch[:validadeH]]" (nome obrigatório).
-    uint32_t ep = (f[2].length() > 0) ? (uint32_t)f[2].toInt() : 0;
-    uint16_t vh = (f[3].length() > 0) ? (uint16_t)f[3].toInt() : 0;
-    if (senhas_adicionar(f[0], f[1], ep, vh))
-        resumoPendente = true;
-    else
+    // Cadastro: "PIN:nome" (nome obrigatório).
+    if (!senhas_adicionar(f[0], f[1]))
         tlogln("Comando remoto ignorado (formato/duplicado/cheio).");
 }
 
@@ -200,8 +174,7 @@ void iniciarFirebase()
 {
     ssl_client.setInsecure();
     stream_ssl_client.setInsecure();
-    delete_ssl_client.setInsecure();
-    resumo_ssl_client.setInsecure();
+    maint_ssl_client.setInsecure();
     // NOTA: NetworkClientSecure (core novo) não tem setBufferSizes().
 
     initializeApp(aClient, app, getAuth(user_auth), processData, "authTask");
@@ -211,7 +184,6 @@ void iniciarFirebase()
 
     // O streaming inicia em processarFirebase() com app.ready() == true.
     streamIniciado = false;
-    ultimoResumo = 0;
 
     tlogln("Firebase pronto (modo assíncrono).");
 }
@@ -226,25 +198,14 @@ void processarFirebase()
         streamIniciado = true;
         Database.get(streamClient, COMANDO_UNICO_PATH, processData, true, "streamTask");
         tlogln("Stream de comandos iniciado.");
-        resumoPendente = true; // publica o estado atual já no próximo loop
     }
 
-    // Publica o resumo quando há mudança (resumoPendente) ou a cada
-    // 30s (auto-cura). Tudo em UM lugar => sem conflito de cliente.
-    if (streamIniciado && app.ready() &&
-        (resumoPendente || millis() - ultimoResumo > 30000))
-    {
-        resumoPendente = false;
-        ultimoResumo = millis();
-        publicarResumo();
-    }
-
-    // Apaga o comando JÁ consumido (fora do callback, sem reentrância).
-    // Garante: PIN não permanece no database.
+    // Apaga o comando consumido (fora do callback, sem reentrância).
+    // Garante que o PIN não permanece no database.
     if (streamIniciado && app.ready() && apagarComandoPendente)
     {
         apagarComandoPendente = false;
-        Database.remove(deleteClient, COMANDO_UNICO_PATH, processData, "deleteTask");
+        Database.remove(maintClient, COMANDO_UNICO_PATH, processData, "deleteTask");
     }
 }
 
