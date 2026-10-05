@@ -19,19 +19,20 @@ Chamada **não-bloqueante** no `loop()`.
 
 ### `void processData(AsyncResult &aResult)`
 Callback unificado (eventos/debug/erros/dados). **Nunca** chama `app.loop()`
-dentro (recursão estoura a `loopTask`). Para strings no stream:
-1. `Database.remove()` no nó (comando não permanece no database);
-2. `"LIMPAR"` → `senhas_limpar()`; senha de admin → recusado;
-3. `"PIN:nome[:epoch]"` → `senhas_adicionar()`; `"RENOVAR:nome:novo[:epoch]"`
-   → `senhas_renovar()`; `"DEL:nome"` → `senhas_remover_nome()`;
-4. após mutação, publica o resumo (nome+data, SEM pin) em `/resumo`.
+dentro (recursão estoura a `loopTask`) e **nunca inicia tarefa async dentro
+dele** (reentrância = reboot): só RAM/NVS aqui. `Database.remove` e os `set`
+rodam no `processarFirebase()`, via flags. Para strings no stream:
+1. marca `apagarComandoPendente` e interpreta: `"LIMPAR"` → `senhas_limpar()`;
+   senha de admin → recusado; `"PIN:nome[:epoch[:validadeH]]"` → adicionar;
+   `"RENOVAR:nome:novo[:epoch]"`, `"BLOQ:nome"`/`"LIB:nome"`, `"DEL:nome"`;
+2. mutação arma `resumoPendente`; o loop publica e apaga o comando.
 
 ## Formato no Firebase
 
-Comando volátil (web escreve, ESP apaga), string:
+Comando volátil (web escreve, ESP apaga no loop seguinte), string:
 
 ```json
-{ "comandos": { "dispositivo1": "4829:Maria:1758760000" } }
+{ "comandos": { "dispositivo1": "4829:Maria:1758760000:12" } }
 ```
 
 Resumo de leitura (ESP escreve, web lê — nunca contém o PIN):
@@ -39,9 +40,13 @@ Resumo de leitura (ESP escreve, web lê — nunca contém o PIN):
 ```json
 { "resumo": { "dispositivo1": {
   "total": 1,
-  "chaves": [{ "nome": "Maria", "criadaEm": 1758760000 }]
+  "chaves": [{ "nome": "Maria", "criadaEm": 1758760000,
+                "validadeH": 12, "ativa": 1 }]
 } } }
 ```
+
+Expiração: a web bloqueia (`BLOQ`) as vencidas ao carregar a lista
+(o ESP não tem relógio); `validadeH: 0` = sem expiração.
 
 - `"4829"` → cadastra o PIN na tabela local (máx. 20).
 - `"LIMPAR"` → zera a tabela local.

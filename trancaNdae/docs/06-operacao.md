@@ -27,12 +27,13 @@ A página usa auth anônima automática (vale nas Rules `auth != null`).
 Sem login, quem abre a página pode enviar comandos — mantenha-a em
 rede/hospedagem restrita.
 
-1. Dispositivo + **nome** (etiqueta única) + PIN de 4 dígitos → **Enviar**.
-3. Um comando por vez: aguarde o display confirmar antes do próximo
-   (last-write-wins no nó `comandos`).
-4. A tabela **Carrega do ESP** sozinha (resumo: nomes + datas, nunca o PIN).
-   *Renovar* troca o PIN mantendo o nome; *Excluir* remove uma;
-   **Apagar chaves do ESP** zera tudo (`LIMPAR`).
+1. Dispositivo + **nome** (etiqueta única) + PIN de 4 dígitos + validade.
+2. Um comando por vez: a página aguarda o ESP reagir e **apaga o comando**
+   (confirmado ou após 45s sem resposta — o PIN não permanece no database).
+3. A tabela **carrega do ESP** sozinha (resumo: metadados, nunca o PIN).
+   *Renovar* troca o PIN; *Bloquear/Liberar* alterna o acesso sem apagar;
+   *Excluir* remove uma; **Apagar chaves** zera tudo. Expiradas são
+   bloqueadas automaticamente ao carregar a página.
 
 Nada de senha fica no database: o ESP apaga o comando após consumir.
 Sem Wi-Fi, a tranca opera com as chaves em cache (NVS).

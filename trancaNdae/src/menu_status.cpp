@@ -50,7 +50,7 @@ static void linhasStatus(uint8_t tela, String out[6], uint8_t &nLinhas)
     case 2: // Chaves (só contadores — PINs nunca no display)
         nLinhas = 4;
         out[0] = "== Chaves ==";
-        snprintf(buf, sizeof(buf), "Ativas: %d/%d", senhas_total(), MAX_SENHAS);
+        snprintf(buf, sizeof(buf), "Ativas: %d/%d", senhas_total_ativas(), MAX_SENHAS);
         out[1] = String(buf);
         out[2] = "Abertura: so com #";
         out[3] = "Ult: " + ultimoEvento;

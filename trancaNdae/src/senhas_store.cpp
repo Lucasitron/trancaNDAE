@@ -3,10 +3,12 @@
 #include "telnet_log.h"
 #include <Preferences.h>
 
-// RAM estática: 20 x (5 + 25 + 4) = 680 bytes. Sem heap, sem fragmentação.
+// RAM estática: 20 x (5 + 25 + 4 + 2 + 1) = 740 bytes. Sem heap.
 static char s_pin[MAX_SENHAS][TOKEN_HEX_LEN + 1];
 static char s_nome[MAX_SENHAS][NOME_MAX_LEN + 1];
 static uint32_t s_data[MAX_SENHAS];
+static uint16_t s_validade[MAX_SENHAS]; // horas; 0 = sem expiração
+static bool s_ativa[MAX_SENHAS];
 static uint8_t s_total = 0;
 static bool s_mudou = false;
 
@@ -56,6 +58,10 @@ static void persistir()
             s_prefs.putString(key, s_nome[i]);
             snprintf(key, sizeof(key), "e%02d", i);
             s_prefs.putUInt(key, s_data[i]);
+            snprintf(key, sizeof(key), "v%02d", i);
+            s_prefs.putUShort(key, s_validade[i]);
+            snprintf(key, sizeof(key), "a%02d", i);
+            s_prefs.putUChar(key, s_ativa[i] ? 1 : 0);
         }
         else
         {
@@ -65,6 +71,12 @@ static void persistir()
             if (s_prefs.isKey(key))
                 s_prefs.remove(key);
             snprintf(key, sizeof(key), "e%02d", i);
+            if (s_prefs.isKey(key))
+                s_prefs.remove(key);
+            snprintf(key, sizeof(key), "v%02d", i);
+            if (s_prefs.isKey(key))
+                s_prefs.remove(key);
+            snprintf(key, sizeof(key), "a%02d", i);
             if (s_prefs.isKey(key))
                 s_prefs.remove(key);
         }
@@ -87,7 +99,7 @@ void senhas_init()
         if (!s_prefs.isKey(key))
             continue;
         String t = s_prefs.getString(key, "");
-        if (t.length() != TOKEN_HEX_LEN || !eh_pin(t))
+        if (!eh_pin(t))
             continue;
         t.toCharArray(s_pin[validos], TOKEN_HEX_LEN + 1);
 
@@ -101,6 +113,13 @@ void senhas_init()
 
         snprintf(key, sizeof(key), "e%02d", i);
         s_data[validos] = s_prefs.isKey(key) ? s_prefs.getUInt(key, 0) : 0;
+
+        // Migração: entradas antigas não têm validade/ativa -> sem
+        // expiração e ativa (comportamento anterior preservado).
+        snprintf(key, sizeof(key), "v%02d", i);
+        s_validade[validos] = s_prefs.isKey(key) ? s_prefs.getUShort(key, 0) : 0;
+        snprintf(key, sizeof(key), "a%02d", i);
+        s_ativa[validos] = s_prefs.isKey(key) ? (s_prefs.getUChar(key, 1) != 0) : true;
 
         validos++;
     }
@@ -136,11 +155,14 @@ static void apagar_indice(int idx)
         memcpy(s_pin[i], s_pin[i + 1], TOKEN_HEX_LEN + 1);
         memcpy(s_nome[i], s_nome[i + 1], NOME_MAX_LEN + 1);
         s_data[i] = s_data[i + 1];
+        s_validade[i] = s_validade[i + 1];
+        s_ativa[i] = s_ativa[i + 1];
     }
     s_total--;
 }
 
-bool senhas_adicionar(const String &pin, const String &nome, uint32_t epoch)
+bool senhas_adicionar(const String &pin, const String &nome,
+                      uint32_t epoch, uint16_t validadeH)
 {
     char nomeLimpo[NOME_MAX_LEN + 1];
     limpar_nome(nome, nomeLimpo);
@@ -156,6 +178,8 @@ bool senhas_adicionar(const String &pin, const String &nome, uint32_t epoch)
     pin.toCharArray(s_pin[s_total], TOKEN_HEX_LEN + 1);
     memcpy(s_nome[s_total], nomeLimpo, NOME_MAX_LEN + 1);
     s_data[s_total] = epoch;
+    s_validade[s_total] = validadeH;
+    s_ativa[s_total] = true; // novo cadastro nasce ativo
     s_total++;
     persistir();
     s_mudou = true;
@@ -171,7 +195,7 @@ bool senhas_remover_nome(const String &nome)
     apagar_indice(idx);
     persistir();
     s_mudou = true;
-    tlogf("Chave removida (%d ativa(s)).\n", s_total);
+    tlogf("Chave removida (%d no total).\n", s_total);
     return true;
 }
 
@@ -185,6 +209,18 @@ bool senhas_renovar(const String &nome, const String &pinNovo, uint32_t epoch)
     persistir();
     s_mudou = true;
     tlogln("Chave renovada (nome mantido).");
+    return true;
+}
+
+bool senhas_bloquear(const String &nome, bool bloquear)
+{
+    int idx = indice_nome(nome);
+    if (idx < 0 || s_ativa[idx] == !bloquear)
+        return false;
+    s_ativa[idx] = !bloquear;
+    persistir();
+    s_mudou = true;
+    tlogln(bloquear ? "Chave bloqueada." : "Chave liberada.");
     return true;
 }
 
@@ -204,9 +240,21 @@ int senhas_total()
     return s_total;
 }
 
+int senhas_total_ativas()
+{
+    int n = 0;
+    for (int i = 0; i < s_total; i++)
+    {
+        if (s_ativa[i])
+            n++;
+    }
+    return n;
+}
+
 bool senhas_contem(const String &pin)
 {
-    return indice_de(pin) >= 0;
+    int idx = indice_de(pin);
+    return idx >= 0 && s_ativa[idx]; // bloqueada não abre
 }
 
 void senhas_resumo_json(String &out)
@@ -222,6 +270,10 @@ void senhas_resumo_json(String &out)
         out += s_nome[i]; // já sanitizado (sem aspas)
         out += "\",\"criadaEm\":";
         out += String(s_data[i]);
+        out += ",\"validadeH\":";
+        out += String(s_validade[i]);
+        out += ",\"ativa\":";
+        out += s_ativa[i] ? "1" : "0";
         out += "}";
     }
     out += "]}";
