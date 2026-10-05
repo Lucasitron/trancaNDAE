@@ -64,13 +64,19 @@ static void limparLinha(uint8_t linha)
 
 static String centralizar(const String &texto)
 {
-    if (texto.length() >= LCD_COLUMNS)
-        return texto.substring(0, LCD_COLUMNS);
-    int espacos = (LCD_COLUMNS - texto.length()) / 2;
+    String t = texto;
+    if (t.length() > LCD_COLUMNS)
+        t = t.substring(0, LCD_COLUMNS);
+    int espacos = (LCD_COLUMNS - t.length()) / 2;
     String resultado = "";
     for (int i = 0; i < espacos; i++)
         resultado += " ";
-    resultado += texto;
+    resultado += t;
+    // Completa até a largura total: sem isso, restos da linha anterior
+    // ("Sistema Iniciado" -> "ado") ficam visíveis no fim da linha 0,
+    // que nunca era apagada.
+    while (resultado.length() < LCD_COLUMNS)
+        resultado += " ";
     return resultado;
 }
 
@@ -132,16 +138,12 @@ void display_mostrar4(const String &l0, const String &l1,
 
 void telaAguardando()
 {
+    // Layout: título | instrução | zona de digitação | dica.
+    // (Qtd. de chaves saiu daqui: está no menu status, tela "Chaves".)
     if (senhas_total() > 0)
-    {
-        char rodape[21];
-        snprintf(rodape, sizeof(rodape), "%d chave(s) ativa(s)", senhas_total());
-        mostrarNoLCD("Aguardando...", "Digite a senha + #", "", rodape);
-    }
+        mostrarNoLCD("Bem vindo!", "Digite a senha:", "", "Confirme com #");
     else
-    {
-        mostrarNoLCD("Aguardando...", "Sem chaves", "", "Envie pela pagina");
-    }
+        mostrarNoLCD("Bem vindo!", "Sem chaves!", "", "Solicite o envio");
 }
 
 String mascarar(const String &s)
