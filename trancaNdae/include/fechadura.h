@@ -1,4 +1,4 @@
-// fechadura.h — Relé, validação e reset de fábrica.
+// fechadura.h — Relé, validação e reinício.
 // Relé energizado = porta ABERTA. GPIO 4 é seguro (sem strapping).
 // Se o módulo for ativo em LOW, inverta RELE_ABERTO/RELE_FECHADO.
 #ifndef FECHADURA_H
@@ -12,7 +12,7 @@
 // Fecha sozinha após este tempo (verificação não-bloqueante via millis).
 #define TEMPO_PORTA_ABERTA_MS 5000
 
-// Digite + '*' = RESET DE FÁBRICA (apaga todas as chaves e reinicia).
+// Digite + '*' = REINICIA o ESP (só reboot; as chaves NÃO são apagadas).
 // NUNCA cadastre "0000" como chave de abertura.
 #define CODIGO_RESET "0000"
 
@@ -34,7 +34,7 @@ void fechadura_loop();
 // Valida o PIN contra a tabela local. SOMENTE com '#'. Admin nunca abre.
 void validarChave(const String &chave);
 
-// Apaga TODAS as chaves (RAM+NVS) e reinicia o ESP.
-void executarResetFabrica();
+// Reinicia o ESP (chaves preservadas).
+void executarReinicio();
 
 #endif

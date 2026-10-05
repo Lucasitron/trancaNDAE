@@ -6,6 +6,8 @@
   A abertura acontece **somente** com `#` (sem autovalidação).
 - `*` com buffer vazio apenas limpa. `*` após a **senha de admin**
   (ver `ADMIN_PASSWORD` em `include/secrets.h`) entra no modo status.
+- `0000` + `*` **reinicia o ESP** (só reboot, chaves preservadas).
+  Nunca cadastre `0000` como chave (barrado no ESP e na página).
 
 ## Modo status (display)
 

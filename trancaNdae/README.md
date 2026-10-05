@@ -64,19 +64,19 @@ tranca-esp32/
 ├── include/
 │   ├── pins.h                 # Definições de pinos
 │   ├── secrets.h              # Credenciais (gitignored; ver secrets.example.h)
-│   ├── wifi_manager.h
-│   ├── firebase_client.h
+│   ├── wifi_manager.h         # Wi-Fi multi-rede + OTA
+│   ├── firebase_client.h      # Stream consome-e-apaga
 │   ├── senhas_store.h         # Tabela local de PINs (RAM+NVS)
-│   ├── telnet_log.h
-│   └── simulation.h
-├── src/
-│   ├── main.cpp               # Fechadura (teclado manual + modo status)
-│   ├── wifi_manager.cpp       # Wi-Fi DHCP, OTA
-│   ├── firebase_client.cpp    # Stream consome-e-apaga
-│   ├── senhas_store.cpp       # Tabela local (add/limpar)
-│   ├── telnet_log.cpp         # Log remoto porta 23
-│   └── simulation.cpp         # Modo Wokwi (no-op em produção)
-├── web/                       # Página: login + envio volátil (sem senhas no DB)
+│   ├── telnet_log.h           # Log Serial+Telnet
+│   ├── teclado.h              # Varredura manual 3x4
+│   ├── display.h              # LCD 20x4 + anti-spam I2C
+│   ├── fechadura.h            # Relé, validação, reinício 0000
+│   ├── menu_status.h          # Diagnóstico (admin + *)
+│   └── simulation.h           # Wokwi (no-op em produção)
+├── src/                       # (mesmos nomes, .cpp)
+│   └── main.cpp               # Só orquestração (setup/loop + despacho)
+├── web/                       # Sem login: envio volátil + metadados (docs/13-web.md)
+├── docs/                      # 01-simulation … 13-web
 ├── platformio.ini
 └── README.md
 ```

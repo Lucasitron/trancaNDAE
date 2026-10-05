@@ -122,10 +122,10 @@ static bool aplicarFixo(const char *rede, const char *senha,
     return WiFi.status() == WL_CONNECTED;
 }
 
-// Tenta UMA rede (DHCP para descobrir + fixo se a sub-rede casar).
-// fixoRef: IP de referência do perfil (STATIC_IP / STATIC_IP2).
-static bool tentarRede(const char *rotulo, const char *rede, const char *senha,
-                       IPAddress fixoRef)
+// Tenta UMA rede: DHCP para descobrir, e aplica o IP fixo do perfil cuja
+// sub-rede casar com o lease (pode ser A=10.0.0.x ou B=192.168.1.x),
+// independentemente de qual SSID conectou.
+static bool tentarRede(const char *rotulo, const char *rede, const char *senha)
 {
     tlog("Rede ");
     tlog_raw(rotulo);
@@ -138,14 +138,24 @@ static bool tentarRede(const char *rotulo, const char *rede, const char *senha,
 
 #if USE_STATIC_IP
     IPAddress lease = WiFi.localIP();
-    if (mesmo24(lease, fixoRef))
+    IPAddress alvo(0, 0, 0, 0);
+    if (mesmo24(lease, IPAddress(STATIC_IP)))
+        alvo = IPAddress(STATIC_IP); // perfil A (10.0.0.x)
+#if defined(STATIC_IP2)
+    else if (mesmo24(lease, IPAddress(STATIC_IP2)))
+        alvo = IPAddress(STATIC_IP2); // perfil B (192.168.1.x)
+#endif
+
+    if (alvo != IPAddress(0, 0, 0, 0))
     {
         IPAddress gw = WiFi.gatewayIP();
         IPAddress dns = WiFi.dnsIP();
+        if (dns == IPAddress(0, 0, 0, 0))
+            dns = gw; // sem DNS do DHCP: usa o gateway
         IPAddress subnet = WiFi.subnetMask();
         tlog("Sub-rede do perfil. Aplicando fixo: ");
-        tlogln(fixoRef.toString());
-        if (!aplicarFixo(rede, senha, fixoRef, gw, dns, subnet))
+        tlogln(alvo.toString());
+        if (!aplicarFixo(rede, senha, alvo, gw, dns, subnet))
         {
             tlogln("Falha no IP fixo; voltando para DHCP.");
             if (!conectarDHCP(rede, senha, 8000))
@@ -154,7 +164,7 @@ static bool tentarRede(const char *rotulo, const char *rede, const char *senha,
     }
     else
     {
-        tlogln("Fora do perfil fixo; mantendo DHCP.");
+        tlogln("Fora dos perfis fixos; mantendo DHCP.");
     }
 #endif
     return true;
@@ -169,7 +179,7 @@ void conectarWiFi()
     wifiPerfil = "";
 
     // 1) Padrão (secrets.h) — sempre primeiro.
-    bool ok = tentarRede("padrao", ssid, password, IPAddress(STATIC_IP));
+    bool ok = tentarRede("padrao", ssid, password);
 
     // 2) Secundário (NVS) — só se ativo e o padrão falhou.
     if (!ok && wifi2_ativo())
@@ -178,7 +188,7 @@ void conectarWiFi()
         String s2 = wifiPrefs.getString("ssid", "");
         String p2 = wifiPrefs.getString("pass", "");
         wifiPrefs.end();
-        if (tentarRede("secundaria", s2.c_str(), p2.c_str(), IPAddress(STATIC_IP2)))
+        if (tentarRede("secundaria", s2.c_str(), p2.c_str()))
         {
             ok = true;
             wifiPerfil = "secundario";

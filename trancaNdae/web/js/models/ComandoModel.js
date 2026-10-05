@@ -15,7 +15,8 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 export function validarPin(pin) {
-  return new RegExp(`^[0-9]{${PIN_LEN}}$`).test(pin ?? "");
+  // "0000" é reservado ao reinício da tranca (0000 + '*').
+  return new RegExp(`^[0-9]{${PIN_LEN}}$`).test(pin ?? "") && pin !== "0000";
 }
 
 // Nome = chave no RTDB: sem . # $ / [ ] : " \ e sem controle.
@@ -88,7 +89,7 @@ async function gravarMeta(device, nome, meta) {
 }
 
 export async function cadastrar(device, pin, nome, validadeH) {
-  if (!validarPin(pin)) throw new Error(`PIN inválido: use ${PIN_LEN} dígitos.`);
+  if (!validarPin(pin)) throw new Error(`PIN inválido: ${PIN_LEN} dígitos (0000 é reservado).`);
   if (!validarNome(nome)) throw new Error('Nome inválido (1–24, sem . # $ / [ ] : " ,).');
   const n = nome.trim();
   const vh = Math.max(0, parseInt(validadeH, 10) || 0);
@@ -97,7 +98,7 @@ export async function cadastrar(device, pin, nome, validadeH) {
 }
 
 export async function renovar(device, nome, pinNovo) {
-  if (!validarPin(pinNovo)) throw new Error(`Novo PIN inválido: use ${PIN_LEN} dígitos.`);
+  if (!validarPin(pinNovo)) throw new Error(`Novo PIN inválido: ${PIN_LEN} dígitos (0000 é reservado).`);
   await update(ref(db, `${caminhoPessoas(device)}/${nome}`), { criadaEm: epochAgora() });
   await enviar(device, `RENOVAR:${nome}:${pinNovo}`);
 }

@@ -50,8 +50,8 @@ void validarChave(const String &chave)
     String codigo = chave;
     codigo.trim();
 
-    // A senha de admin NUNCA abre a porta.
-    if (codigo == ADMIN_PASSWORD)
+    // O código de reinício e a senha de admin NUNCA abrem a porta.
+    if (codigo == ADMIN_PASSWORD || codigo == CODIGO_RESET)
     {
         mostrarNoLCD("!! INVALIDO !!", "Uso restrito", "", "Tente novamente");
         delay(1500);
@@ -73,11 +73,13 @@ void validarChave(const String &chave)
     telaAguardando();
 }
 
-void executarResetFabrica()
+void executarReinicio()
 {
-    mostrarNoLCD("RESET FABRICA", "Apagando chaves...", "", "Reiniciando...");
-    senhas_limpar();
-    tlogln("RESET de fabrica via teclado: chaves apagadas. Reiniciando...");
-    delay(1500);
+    // Garante a tranca FECHADA antes de reiniciar (não deixa destrancada).
+    digitalWrite(PINO_RELE, RELE_FECHADO);
+    portaAberta = false;
+    mostrarNoLCD("Reiniciando...", "Aguarde!", "", "");
+    tlogln("Reinicio via teclado (0000). Chaves preservadas.");
+    delay(1200);
     ESP.restart();
 }
