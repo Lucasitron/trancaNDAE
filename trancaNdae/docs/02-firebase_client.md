@@ -1,105 +1,58 @@
-# 🔥 Módulo Firebase Client
+# Firebase Client — comandos voláteis (nada persiste na nuvem)
 
-Integração com **Firebase Realtime Database** em modo assíncrono, com persistência de token em **NVS**.
+Integração com **Firebase Realtime Database** em modo assíncrono. As senhas
+vivem **somente no ESP** (RAM+NVS via `senhas_store`); o RTDB transporta
+apenas comandos que o ESP **consome e apaga**.
 
 ## API
 
 ### `void iniciarFirebase()`
-Inicializa a autenticação, o app e o streaming no nó `/comandos/dispositivo1`. Recupera token pendente da NVS no boot.
-
-```cpp
-iniciarFirebase();
-```
+Autenticação (`UserAuth`), app e preparo do stream. O stream inicia em
+`processarFirebase()` quando `app.ready()`.
 
 ### `void processarFirebase()`
-Mantém o app assíncrono rodando. Chamada **não-bloqueante** no `loop()`.
+Mantém o app assíncrono rodando + inicia o stream UMA vez após auth.
+Chamada **não-bloqueante** no `loop()`.
 
-```cpp
-void loop() {
-    processarFirebase();
-}
-```
-
-### `void salvar_token_nvs(const String &token)`
-Persiste o token HMAC recebido do Firebase na NVS.
-
-### `String ler_token_nvs()`
-Recupera o token salvo. Retorna `""` se vazio.
-
-### `void limpar_token_nvs()`
-Remove o token da NVS. **Chame após validação bem-sucedida** (anti-replay).
-
-## Callback
+### `bool firebase_pronto()`
+`true` quando autenticado (usado pelo modo status do display).
 
 ### `void processData(AsyncResult &aResult)`
-Callback unificado para eventos, erros, debug e dados. Quando uma **string** chega no nó monitorado, chama `salvar_token_nvs()`.
+Callback unificado (eventos/debug/erros/dados). **Nunca** chama `app.loop()`
+dentro (recursão estoura a `loopTask`). Para strings no stream:
+1. `Database.remove()` no nó (comando não permanece no database);
+2. `"LIMPAR"` → `senhas_limpar()`; senha de admin → recusado;
+3. `"PIN:nome[:epoch]"` → `senhas_adicionar()`; `"RENOVAR:nome:novo[:epoch]"`
+   → `senhas_renovar()`; `"DEL:nome"` → `senhas_remover_nome()`;
+4. após mutação, publica o resumo (nome+data, SEM pin) em `/resumo`.
 
-## Formato Esperado no Firebase
+## Formato no Firebase
 
-### Comando único legado
-
-O PC deve publicar uma **string** no nó `/comandos/dispositivo1`:
-
-```json
-{
-  "comandos": {
-    "dispositivo1": "a3f5b8c9...e7d2"
-  }
-}
-```
-
-### Gerenciador de senhas (Casa do Estudante)
-
-A página `web/` mantém duas chaves por dispositivo. O ESP32 lê **somente**
-`lista` (uma string CSV, sem JSON — a lib não tem parser e a RAM é limitada):
+Comando volátil (web escreve, ESP apaga), string:
 
 ```json
-{
-  "senhas": {
-    "dispositivo1": {
-      "lista": "a3f5,9c2e",
-      "itens": {
-        "-Oa1b2c": { "nome": "Maria Q12", "token": "a3f5", "ativa": true, "expiraEm": 0, "criadaEm": 1758760000000 }
-      }
-    }
-  }
-}
+{ "comandos": { "dispositivo1": "4829:Maria:1758760000" } }
 ```
 
-- `lista`: só tokens de senhas **ativas e não expiradas** (máx. 20, ver
-  `include/senhas_store.h: MAX_SENHAS`). Bloquear/excluir/expirar = sumir da
-  lista = slot liberado no ESP32. Não há blocklist que cresce.
-  String `""` = revogação total deliberada; evento `null` (nó ausente,
-  ex. reconnect) **não** apaga o cache — evita lockout por transitório.
-- `itens`: metadados só para a web (o ESP32 ignora).
-- Lista vazia/nula = zero chaves (fail-closed). Expiração é aplicada pela web
-  ao recompor `lista`; sem NTP no ESP32, um token expirado ainda vale offline
-  até a próxima sincronização.
+Resumo de leitura (ESP escreve, web lê — nunca contém o PIN):
+
+```json
+{ "resumo": { "dispositivo1": {
+  "total": 1,
+  "chaves": [{ "nome": "Maria", "criadaEm": 1758760000 }]
+} } }
+```
+
+- `"4829"` → cadastra o PIN na tabela local (máx. 20).
+- `"LIMPAR"` → zera a tabela local.
+- `null`/ausente → estado normal (nó já consumido/apagado).
 
 ## Dependências
 
-- `FirebaseClient` (mobizt)
-- `Preferences.h` (core ESP32)
-- `WiFiClientSecure.h` (core ESP32)
-- `secrets.h` (credenciais Firebase)
+- `FirebaseClient` (mobizt), `WiFiClientSecure.h`, `secrets.h`
 
 ## Segurança
 
-- ✅ TLS via `WiFiClientSecure` (`setInsecure()` para testes)
-- ✅ Autenticação por e-mail/senha (`UserAuth`)
-- ✅ Renovação automática de token (3000s)
-- ⚠️ Em produção, use certificado raiz real em vez de `setInsecure()`
-
-## Exemplo de Uso
-
-```cpp
-#include "firebase_client.h"
-
-void setup() {
-    iniciarFirebase();
-}
-
-void loop() {
-    processarFirebase();
-}
-```
+- TLS (`setInsecure()` p/ testes; certificado real em produção)
+- Auth e-mail/senha com renovação (3000s); Rules exigem `auth != null`
+- PINs nunca trafegam além do comando volátil (apagado após leitura)

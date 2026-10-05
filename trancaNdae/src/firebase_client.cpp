@@ -1,6 +1,13 @@
 
-// ================= CONFIGURAÇÃO DA BIBLIOTECA =================
-// Define as funcionalidades que queremos usar
+// firebase_client.cpp — Firebase em modo assíncrono (mobizt/FirebaseClient).
+//
+// Arquitetura (senhas SÓ no ESP, nada persistido no RTDB):
+// - A web escreve comandos VOLÁTEIS em /comandos/dispositivo1:
+//     "1234"   -> cadastra o PIN na tabela local (RAM+NVS)
+//     "LIMPAR" -> apaga TODA a tabela local
+// - O ESP consome via stream e APAGA o nó (Database.remove) em seguida:
+//   nada de senha permanece no database.
+// - A abertura é SOMENTE pelo teclado com PIN local. Sem token em NVS.
 #define ENABLE_USER_AUTH
 #define ENABLE_DATABASE
 
@@ -11,83 +18,49 @@
 #include "firebase_client.h"
 #include "senhas_store.h"
 #include "telnet_log.h"
-#include <Preferences.h>
 
 #include "secrets.h"
 
-
 // ================= OBJETOS =================
 // WiFiClientSecure do core Arduino (FirebaseClient já sabe usar).
-// NÃO usar digitaldragon/SSLClient aqui: construído vazio ele deixa
-// o ponteiro interno null -> "init_tcp_connection(): Client pointer is null".
+// Um cliente POR tarefa assíncrona (a lib não permite compartilhar):
+//   auth  -> aClient | stream -> streamClient
+//   delete do comando -> deleteClient | resumo -> resumoClient
 WiFiClientSecure ssl_client;
 WiFiClientSecure stream_ssl_client;
-WiFiClientSecure senhas_ssl_client;
+WiFiClientSecure delete_ssl_client;
+WiFiClientSecure resumo_ssl_client;
 
-// Clientes assíncronos
 using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client);
 AsyncClient streamClient(stream_ssl_client);
-AsyncClient senhasClient(senhas_ssl_client);
+AsyncClient deleteClient(delete_ssl_client);
+AsyncClient resumoClient(resumo_ssl_client);
 
 // Autenticação
-UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD, 3000); // Token expira em 50min
+UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD, 3000);
 
 // Aplicação e Database
 FirebaseApp app;
 RealtimeDatabase Database;
 
-// NVS via Preferences
-Preferences preferences;
-
-// ================= NVS (MESMO CÓDIGO DE ANTES) =================
-void salvar_token_nvs(const String &token)
-{
-    preferences.begin("meu_app", false);
-    preferences.putString("token", token);
-    preferences.end();
-    tlogln("✅ Token salvo na NVS: " + token);
-}
-
-String ler_token_nvs()
-{
-    preferences.begin("meu_app", true);
-    // Guarda anti-spam: getString() com chave inexistente loga
-    // "[E] getString(): nvs_get_str len fail: token NOT_FOUND" no core novo.
-    // isKey() evita o erro (e o NVS read a cada 2s no loop some do monitor).
-    if (!preferences.isKey("token"))
-    {
-        preferences.end();
-        return "";
-    }
-    String token = preferences.getString("token", "");
-    preferences.end();
-    return token;
-}
-
-void limpar_token_nvs()
-{
-    preferences.begin("meu_app", false);
-    preferences.remove("token");
-    preferences.end();
-    tlogln("🗑️ Token removido da NVS.");
-}
-
-// Flag de controle dos streams (iniciam só após autenticação)
+// Stream de comandos inicia só após autenticação
 static bool streamIniciado = false;
-static bool senhasStreamIniciado = false;
+static unsigned long ultimoResumo = 0;
+static bool resumoPendente = false;
+
+// Declaradas antes do callback (definições abaixo).
+static void publicarResumo();
+static void consumirComando(const String &valor);
 
 // ================= CALLBACK UNIFICADO =================
-// Esta função é chamada para TUDO: eventos, erros, debug e dados.
-// IMPORTANTE: NÃO chamar app.loop() aqui dentro (causa recursão e
-// estoura a pilha da loopTask -> "Stack canary watchpoint triggered").
+// IMPORTANTE: NÃO chamar app.loop() aqui dentro (recursão -> estoura a
+// pilha da loopTask: "Stack canary watchpoint triggered").
 void processData(AsyncResult &aResult)
 {
-    // Sai quando não há resultado (chamada a partir do loop)
     if (!aResult.isResult())
         return;
 
-    // 1. Eventos (ex: início de conexão, desconexão)
     if (aResult.isEvent())
     {
         Firebase.printf("Event task: %s, msg: %s, code: %d\n",
@@ -96,7 +69,6 @@ void processData(AsyncResult &aResult)
                         aResult.eventLog().code());
     }
 
-    // 2. Debug (logs detalhados da biblioteca)
     if (aResult.isDebug())
     {
         Firebase.printf("Debug task: %s, msg: %s\n",
@@ -104,7 +76,6 @@ void processData(AsyncResult &aResult)
                         aResult.debug().c_str());
     }
 
-    // 3. Erros
     if (aResult.isError())
     {
         Firebase.printf("Error task: %s, msg: %s, code: %d\n",
@@ -113,111 +84,150 @@ void processData(AsyncResult &aResult)
                         aResult.error().code());
     }
 
-    // 4. Dados recebidos (o que nos interessa)
-    if (aResult.available())
+    if (!aResult.available())
+        return;
+
+    RealtimeDatabaseResult &stream = aResult.to<RealtimeDatabaseResult>();
+    if (!stream.isStream())
+        return;
+
+    // Nó ausente/apagado: nada a fazer (estado normal após consumo).
+    if (stream.type() == 0 /* null */)
+        return;
+
+    if (stream.type() != 5 /* string */)
+        return;
+
+    String valor = stream.to<String>();
+    valor.trim();
+
+    // Consome e APAGA o nó: comando volátil, não permanece no database.
+    Database.remove(deleteClient, COMANDO_UNICO_PATH, processData, "deleteTask");
+
+    consumirComando(valor);
+}
+
+// Publica o resumo (nome+data, SEM pin) para a página acompanhar.
+static void publicarResumo()
+{
+    String json;
+    senhas_resumo_json(json);
+    Database.set(resumoClient, RESUMO_PATH, json, processData, "resumoTask");
+}
+
+// Interpreta um comando volátil (chamado após apagar o nó).
+static void consumirComando(const String &valor)
+{
+    if (valor == COMANDO_LIMPAR)
     {
-        RealtimeDatabaseResult &stream = aResult.to<RealtimeDatabaseResult>();
-
-        // Verifica se é um evento de stream
-        if (stream.isStream())
+        if (senhas_limpar())
         {
-            bool ehListaSenhas = (aResult.uid() == "senhasTask");
-
-            // Nó removido/ausente: o comando único vazio é só informativo.
-            // A lista de senhas NUNCA é apagada por null (pode ser um
-            // reconnect transitório): o cache NVS/RAM é mantido. A
-            // revogação deliberada (inclusive total) sempre chega como
-            // string — "" significa zero chaves.
-            if (stream.type() == 0 /* null */)
-            {
-                if (ehListaSenhas)
-                    Serial.println("ℹ️ Lista de senhas ausente (null). Cache mantido.");
-                else
-                    Serial.println("ℹ️ Nó do Firebase vazio (null).");
-                return;
-            }
-
-            // Se for uma string, processa o token / lista
-            if (stream.type() == 5 /* string */)
-            {
-                String valor = stream.to<String>();
-                if (ehListaSenhas)
-                {
-                    tlogf("🔑 Lista de senhas recebida (%d chars).\n", valor.length());
-                    senhas_sync_csv(valor);
-                }
-                else
-                {
-                    tlog("🔐 Token recebido: ");
-                    tlogln(valor);
-
-                    if (valor.length() > 0)
-                    {
-                        salvar_token_nvs(valor);
-                        // Aqui você pode avisar o usuário via LCD/buzzer
-                    }
-                }
-            }
+            tlogln("Comando remoto: tabela zerada.");
+            resumoPendente = true;
         }
+        else
+            tlogln("Comando remoto LIMPAR: tabela já vazia.");
+        return;
     }
+
+    // Nunca aceitar a senha de admin como chave de abertura.
+    if (valor == ADMIN_PASSWORD || valor.startsWith(String(ADMIN_PASSWORD) + ":"))
+    {
+        tlogln("Comando remoto recusado (senha de admin).");
+        return;
+    }
+
+    // Formato "CMD:a:b:c" — separa em até 4 campos.
+    String f[4];
+    int ini = 0, n = 0;
+    while (n < 4)
+    {
+        int fim = valor.indexOf(':', ini);
+        if (fim < 0)
+        {
+            f[n++] = valor.substring(ini);
+            break;
+        }
+        f[n++] = valor.substring(ini, fim);
+        ini = fim + 1;
+    }
+    while (n < 4)
+        f[n++] = "";
+
+    if (f[0] == "DEL" && f[1].length() > 0)
+    {
+        if (senhas_remover_nome(f[1]))
+            resumoPendente = true;
+        else
+            tlogln("DEL ignorado (nome inexistente).");
+        return;
+    }
+
+    if (f[0] == "RENOVAR" && f[1].length() > 0 && f[2].length() > 0)
+    {
+        uint32_t ep = (f[3].length() > 0) ? (uint32_t)f[3].toInt() : 0;
+        if (senhas_renovar(f[1], f[2], ep))
+            resumoPendente = true;
+        else
+            tlogln("RENOVAR ignorado (nome ausente/novo inválido).");
+        return;
+    }
+
+    // Cadastro: "PIN:nome[:epoch]" (nome pode ser vazio).
+    uint32_t ep = (f[2].length() > 0) ? (uint32_t)f[2].toInt() : 0;
+    if (senhas_adicionar(f[0], f[1], ep))
+        resumoPendente = true;
+    else
+        tlogln("Comando remoto ignorado (formato/duplicado/cheio).");
 }
 
 // ================= INICIALIZAÇÃO =================
 void iniciarFirebase()
 {
-    // 0. Garante que o namespace da NVS exista (evita
-    // "nvs_open failed: NOT_FOUND" no primeiro boot em modo read-only)
-    preferences.begin("meu_app", false);
-    preferences.end();
-
-    // 1. Recupera token pendente da NVS (caso tenha reiniciado)
-    String tokenPendente = ler_token_nvs();
-    if (tokenPendente.length() > 0)
-    {
-        tlogln("♻️ Token pendente recuperado da NVS: " + tokenPendente);
-    }
-
-    // 2. Configura SSL (para testes, use setInsecure)
-    // Em produção, use certificados específicos
     ssl_client.setInsecure();
     stream_ssl_client.setInsecure();
-    senhas_ssl_client.setInsecure();
-    // NOTA: NetworkClientSecure (core novo) não tem setBufferSizes();
-    // esse ajuste só existe no ESP_SSLClient. Removido para compilar.
+    delete_ssl_client.setInsecure();
+    resumo_ssl_client.setInsecure();
+    // NOTA: NetworkClientSecure (core novo) não tem setBufferSizes().
 
-    // 3. Inicializa a autenticação e o app
     initializeApp(aClient, app, getAuth(user_auth), processData, "authTask");
 
-    // 4. Obtém a instância do Database
     app.getApp(Database);
     Database.url(DATABASE_URL);
 
-    // 5. Os streamings são iniciados em processarFirebase() assim que
-    // app.ready() for true (evita erro "unauthenticate" + retry frenético).
-    // Ver exemplo oficial StreamConcurentcy.ino.
+    // O streaming inicia em processarFirebase() com app.ready() == true.
     streamIniciado = false;
-    senhasStreamIniciado = false;
+    ultimoResumo = 0;
 
-    tlogln("🚀 Firebase pronto (modo assíncrono).");
+    tlogln("Firebase pronto (modo assíncrono).");
 }
 
 // ================= LOOP =================
 void processarFirebase()
 {
-    // Mantém o app rodando (processa tarefas assíncronas)
     app.loop();
 
-    // Inicia os streams UMA vez, somente após autenticação completa
     if (!streamIniciado && app.ready())
     {
         streamIniciado = true;
         Database.get(streamClient, COMANDO_UNICO_PATH, processData, true, "streamTask");
-        tlogln("📡 Stream do Firebase iniciado.");
+        tlogln("Stream de comandos iniciado.");
+        resumoPendente = true; // publica o estado atual já no próximo loop
     }
-    if (!senhasStreamIniciado && app.ready())
+
+    // Publica o resumo quando há mudança (resumoPendente) ou a cada
+    // 30s (auto-cura). Tudo em UM lugar => sem conflito de cliente.
+    if (streamIniciado && app.ready() &&
+        (resumoPendente || millis() - ultimoResumo > 30000))
     {
-        senhasStreamIniciado = true;
-        Database.get(senhasClient, SENHAS_LISTA_PATH, processData, true, "senhasTask");
-        tlogln("📡 Stream da lista de senhas iniciado.");
+        resumoPendente = false;
+        ultimoResumo = millis();
+        publicarResumo();
     }
+}
+
+// Pronto quando autenticado (porta de entrada do modo status).
+bool firebase_pronto()
+{
+    return app.ready();
 }
