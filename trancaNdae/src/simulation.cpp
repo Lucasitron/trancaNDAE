@@ -1,14 +1,10 @@
 // simulation.cpp
 #include "simulation.h"
 #include "pins.h"
-#include "firebase_client.h"
+#include "senhas_store.h"
+#include "display.h" // mostrarNoLCD (módulo display)
 
 #ifdef WOKWI_SIM
-
-// ================= DEPENDÊNCIAS EXTERNAS (definidas no main.ino) =================
-// Declaradas como extern para evitar duplicação
-extern void mostrarNoLCD(const String &status, const String &mensagem,
-                         const String &teclado, const String &rodape);
 
 // ================= ESTADO INTERNO =================
 static bool ultimoEstadoBotao = HIGH;
@@ -25,15 +21,14 @@ void simulation_setup()
 // ================= LOOP =================
 void simulation_loop()
 {
-    // --- 1. Botão TEST grava código plain de teste e salva na NVS ---
+    // --- 1. Botão TEST cadastra o PIN de teste na tabela local ---
     bool estadoAtual = digitalRead(PINO_BOTAO_TESTE);
 
     if (ultimoEstadoBotao == HIGH && estadoAtual == LOW) // borda de descida
     {
-        // Código de teste "1234" (sem cripto, igual ao fluxo da web)
-        salvar_token_nvs("1234");
+        senhas_adicionar("1234", "Teste Wokwi", 0);
 
-        Serial.println("[WOKWI] Código de teste gravado: 1234");
+        Serial.println("[WOKWI] PIN de teste cadastrado: 1234");
         mostrarNoLCD("Comando Pendente", "Digite a chave", "", "Pressione # para OK");
     }
     ultimoEstadoBotao = estadoAtual;

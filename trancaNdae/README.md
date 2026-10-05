@@ -16,19 +16,20 @@
 
 ## 📖 Sobre o Projeto
 
-Este projeto implementa uma **tranca eletrônica segura** baseada em ESP32, onde o comando de abertura é enviado remotamente via **Firebase Realtime Database** e validado localmente por um **PIN digitado no teclado matricial**.
-
-A segurança é garantida por **HMAC-SHA256**: o PC (remetente) cifra a palavra-comando com o PIN, e o ESP32 só aceita o comando se o PIN digitado gerar o mesmo hash. Isso elimina a necessidade de transmitir a chave pela rede.
+Este projeto implementa uma **tranca eletrônica** baseada em ESP32. As senhas
+ficam **somente no ESP** (RAM+NVS): a página web envia comandos voláteis via
+**Firebase Realtime Database** (um PIN ou `LIMPAR`), o ESP consome, cadastra
+localmente e **apaga o nó** — nada de senha permanece na nuvem. A abertura é
+**somente no teclado**, digitando o PIN + `#`.
 
 ### ✨ Funcionalidades
 
-- 🔐 **Autenticação HMAC-SHA256** com anti-replay (token consumido após uso)
-- 📡 **Wi-Fi com IP fixo** + reconexão automática via eventos
-- 🔥 **Firebase Realtime Database** em modo assíncrono (streaming)
-- 💾 **Persistência em NVS** — token sobrevive a reboot
-- 🔄 **OTA** — atualização de firmware sem cabo
-- ⌨️ **Teclado matricial 3x4** (4x4 no Wokwi)
-- 🖥️ **LCD 20x4 I2C** com layout em 4 zonas
+- 🔐 **Senhas só no ESP** (tabela local 20 PINs, sobrevive a reboot)
+- ⌨️ **Abertura somente com `#`** + auto-fechamento em 5s (não-bloqueante)
+- 🖥️ **Modo status no display** (senha de admin + `*`, navegação 2/8/4/6)
+- 📡 **Wi-Fi com DHCP** + Telnet de logs (porta 23) + **OTA** sem cabo
+- 🔥 **Firebase RTDB assíncrono** (stream consome-e-apaga comandos)
+- 🖥️ **LCD 20x4 I2C** com auto-detecção e anti-spam de escritas
 - 🧪 **Modo simulação Wokwi** isolado em módulo próprio
 
 ---
@@ -49,12 +50,10 @@ A segurança é garantida por **HMAC-SHA256**: o PC (remetente) cifra a palavra-
 ```
 
 **Fluxo:**
-1. O PC cifra `"ABRIR"` com o PIN → gera token HMAC
-2. Publica o token no Firebase
-3. ESP32 recebe via streaming e salva na NVS
-4. Usuário digita o PIN no teclado
-5. ESP32 recalcula o HMAC e compara com o token salvo
-6. Se válido: comuta o relé e **remove o token** (anti-replay)
+1. A página envia PIN (ou `LIMPAR`) em `comandos/{dispositivo}`
+2. ESP32 recebe via streaming, cadastra/zera a tabela local e **apaga o nó**
+3. Usuário digita o PIN no teclado + `#`
+4. Se válido: relé abre por 5s e fecha sozinho
 
 ---
 
@@ -64,17 +63,20 @@ A segurança é garantida por **HMAC-SHA256**: o PC (remetente) cifra a palavra-
 tranca-esp32/
 ├── include/
 │   ├── pins.h                 # Definições de pinos
-│   ├── secrets.h              # Credenciais (gitignored)
+│   ├── secrets.h              # Credenciais (gitignored; ver secrets.example.h)
 │   ├── wifi_manager.h
 │   ├── firebase_client.h
+│   ├── senhas_store.h         # Tabela local de PINs (RAM+NVS)
+│   ├── telnet_log.h
 │   └── simulation.h
 ├── src/
-│   ├── main.ino               # Ponto de entrada
-│   ├── wifi_manager.cpp       # Wi-Fi, IP fixo, OTA
-│   ├── firebase_client.cpp    # Firebase + NVS
+│   ├── main.cpp               # Fechadura (teclado manual + modo status)
+│   ├── wifi_manager.cpp       # Wi-Fi DHCP, OTA
+│   ├── firebase_client.cpp    # Stream consome-e-apaga
+│   ├── senhas_store.cpp       # Tabela local (add/limpar)
+│   ├── telnet_log.cpp         # Log remoto porta 23
 │   └── simulation.cpp         # Modo Wokwi (no-op em produção)
-├── diagram.json               # Circuito Wokwi (branch simulação)
-├── wokwi.toml                 # Config Wokwi (branch simulação)
+├── web/                       # Página: login + envio volátil (sem senhas no DB)
 ├── platformio.ini
 └── README.md
 ```
@@ -106,26 +108,12 @@ cd tranca-esp32
 
 ### 2. Configurar credenciais
 
-Crie `include/secrets.h` (baseado em `secrets.example.h`):
-
-```cpp
-#define WIFI_SSID "SUA_REDE"
-#define WIFI_PASSWORD "SUA_SENHA"
-
-#define USE_STATIC_IP true
-#define STATIC_IP 192, 168, 1, 150
-#define STATIC_GATEWAY 192, 168, 1, 1
-#define STATIC_SUBNET 255, 255, 255, 0
-#define STATIC_DNS 8, 8, 8, 8
-
-#define OTA_HOSTNAME "esp32-rele"
-#define OTA_PASSWORD "senha_ota"
-
-#define API_KEY "..."
-#define USER_EMAIL "..."
-#define USER_PASSWORD "..."
-#define DATABASE_URL "https://seu-projeto-default-rtdb.firebaseio.com/"
+```bash
+cp trancaNdae/include/secrets.example.h trancaNdae/include/secrets.h
+# edite com Wi-Fi, Firebase, ADMIN_PASSWORD, OTA e Telnet
 ```
+
+> `secrets.h` é gitignored — nunca commitado. Ver `docs/06-operacao.md`.
 
 ### 3. Compilar e gravar
 

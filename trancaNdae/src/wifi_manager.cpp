@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFiManager.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 
@@ -13,59 +12,113 @@ const char *password = WIFI_PASSWORD;
 
 volatile bool wifiConectado = false;
 
-// ================= IP FIXO =================
-void configurarIPFixo()
+// ================= IP FIXO MULTI-REDE =================
+// Estratégia: conecta por DHCP primeiro (pega gateway/DNS corretos de
+// QUALQUER rede), descobre em qual sub-rede estamos e, se ela casar com
+// um perfil, reaplica aquele IP fixo (mesmo gateway/DNS do DHCP).
+// Assim nunca associamos com um IP de outra rede.
+static bool mesmo24(IPAddress a, IPAddress b)
 {
-#if USE_STATIC_IP
-    IPAddress ip(STATIC_IP);
-    IPAddress gateway(STATIC_GATEWAY);
-    IPAddress subnet(STATIC_SUBNET);
-    IPAddress dns(STATIC_DNS);
+    return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+}
 
-    // WiFi.config deve ser chamado ANTES do WiFi.begin
+// Conecta via DHCP. Retorna true se WL_CONNECTED dentro do timeout.
+static bool conectarDHCP(unsigned long timeoutMs)
+{
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(OTA_HOSTNAME);
+    WiFi.begin(ssid, password);
+    tlog("DHCP: conectando");
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - t0 < timeoutMs))
+    {
+        delay(300);
+        tlog_raw(".");
+    }
+    return WiFi.status() == WL_CONNECTED;
+}
+
+// Reaplica IP fixo (mesmo gateway/DNS) e reconecta. true se conectou.
+static bool aplicarFixo(IPAddress ip, IPAddress gateway, IPAddress dns, IPAddress subnet)
+{
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(OTA_HOSTNAME);
     if (!WiFi.config(ip, gateway, subnet, dns))
     {
-        tlogln("⚠️ Falha ao configurar IP estático. Usando DHCP.");
+        tlogln("Falha WiFi.config; mantendo DHCP.");
+        return false;
     }
-    else
+    WiFi.begin(ssid, password);
+    tlog("IP fixo: reconectando em ");
+    tlogln(ip.toString());
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - t0 < 8000))
     {
-        tlog("🔧 IP fixo configurado: ");
-        tlogln(ip.toString());
+        delay(300);
+        tlog_raw(".");
     }
-#else
-    tlogln("🔧 Modo DHCP ativo (IP dinâmico).");
-#endif
+    return WiFi.status() == WL_CONNECTED;
 }
 
 // ================= CONEXÃO WI-FI =================
 void conectarWiFi()
 {
     tlogln("\nIniciando conexão Wi-Fi...");
-
     WiFi.mode(WIFI_STA);
-    WiFi.setHostname(OTA_HOSTNAME); // Define hostname (útil para mDNS/OTA)
-    configurarIPFixo();             // Aplica IP fixo antes do begin
+    WiFi.setHostname(OTA_HOSTNAME);
 
-    WiFi.begin(ssid, password);
+    // 1) DHCP: descobre a rede real (gateway/DNS corretos).
+    bool ok = conectarDHCP(12000);
 
-    unsigned long tempoInicio = millis();
-    const unsigned long timeoutConexao = 10000;
-
-    while (WiFi.status() != WL_CONNECTED && (millis() - tempoInicio < timeoutConexao))
+#if USE_STATIC_IP
+    if (ok)
     {
-        delay(500);
-        tlog_raw(".");
+        IPAddress lease = WiFi.localIP();
+        IPAddress gw = WiFi.gatewayIP();
+        IPAddress dns = WiFi.dnsIP();
+        IPAddress subnet = WiFi.subnetMask();
+        IPAddress alvo;
+
+        if (mesmo24(lease, IPAddress(STATIC_IP)))
+            alvo = IPAddress(STATIC_IP); // perfil A (10.0.0.x)
+#if defined(STATIC_IP2)
+        else if (mesmo24(lease, IPAddress(STATIC_IP2)))
+            alvo = IPAddress(STATIC_IP2); // perfil B (192.168.1.x)
+#endif
+        else
+        {
+            tlogln("Rede fora dos perfis fixos; mantendo DHCP.");
+            alvo = IPAddress(0, 0, 0, 0);
+        }
+
+        if (alvo != IPAddress(0, 0, 0, 0))
+        {
+            tlog("Sub-rede detectada. Aplicando IP fixo do perfil: ");
+            tlogln(alvo.toString());
+            if (!aplicarFixo(alvo, gw, dns, subnet))
+            {
+                tlogln("Falha no IP fixo; voltando para DHCP.");
+                ok = conectarDHCP(10000);
+            }
+        }
     }
+#endif
 
-    if (WiFi.status() == WL_CONNECTED)
+    if (ok)
     {
-        tlogln("\n✅ Wi-Fi Conectado com sucesso!");
+        tlogln("\nWi-Fi Conectado com sucesso!");
         tlog("Endereço IP: ");
         tlogln(WiFi.localIP().toString());
+        tlog("Gateway: ");
+        tlogln(WiFi.gatewayIP().toString());
     }
     else
     {
-        tlogln("\n❌ Falha ao conectar no Wi-Fi. Verifique as credenciais.");
+        tlogln("\nFalha ao conectar no Wi-Fi. Verifique credenciais/rede.");
     }
 }
 

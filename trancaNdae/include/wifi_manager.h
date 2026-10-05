@@ -12,7 +12,6 @@ void conectarWiFi();
 void eventoWiFi(WiFiEvent_t event);
 
 // Novas funções
-void configurarIPFixo();
 void iniciarOTA();
 void processarOTA(); // Chame no loop() para processar atualizações
 

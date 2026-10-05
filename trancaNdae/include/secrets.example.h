@@ -14,17 +14,25 @@
 #define USER_PASSWORD "SENHA_FORTE"
 #define DATABASE_URL "https://seu-projeto-default-rtdb.firebaseio.com"
 
-// --- Rede Fixa (IP estático) ---
-// Escolha IPs fora do range do DHCP do seu roteador para evitar conflitos
+// --- Rede: fixo multi-perfil + DHCP de reserva ---
+// O ESP tenta o perfil A (10.0.0.x), depois o B (192.168.1.x); sem
+// conexão em nenhum, usa DHCP. DNS = gateway. Ajuste IPs/gateways
+// para não conflitar com o DHCP do seu roteador.
 #define USE_STATIC_IP true
 #define STATIC_IP 10, 0, 0, 150
 #define STATIC_GATEWAY 10, 0, 0, 1
+#define STATIC_IP2 192, 168, 1, 150
+#define STATIC_GATEWAY2 192, 168, 1, 1
 #define STATIC_SUBNET 255, 255, 255, 0
-#define STATIC_DNS 8, 8, 8, 8
+#define IP_FALLBACK_DHCP
 
 // --- OTA ---
 #define OTA_HOSTNAME "esp32-rele"
 #define OTA_PASSWORD "troque_esta_senha"
+
+// --- Admin (modo status no display: senha + '*') ---
+// TROQUE por uma senha só sua. Nunca abre a porta nem entra na tabela.
+#define ADMIN_PASSWORD "9999"
 
 // --- Telnet (log remoto via rede) ---
 // Conecte: telnet <IP> 23

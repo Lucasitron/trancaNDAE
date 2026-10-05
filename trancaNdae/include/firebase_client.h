@@ -6,24 +6,25 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <FirebaseClient.h>
-#include <Preferences.h>
 #include "secrets.h"
 
-
-// Nó com a lista compacta de chaves (CSV de tokens HMAC, 4 hex).
-// Gerenciado pela página web (web/js/models/SenhasModel.js).
-#define SENHAS_LISTA_PATH "/senhas/dispositivo1/lista"
-
-// Nó legado de comando único (mantido para compatibilidade/emergência).
+// Nó de comandos VOLÁTEIS (a web escreve, o ESP consome e apaga).
+// Nome é a chave de gerência (único por tabela):
+//   "PIN:nome[:epoch]"        -> cadastra (ex.: "4829:Maria:1758760000")
+//   "RENOVAR:nome:novo[:epoch]" -> troca o PIN mantendo o nome
+//   "DEL:nome"                -> remove uma chave
+//   "LIMPAR"                  -> apaga toda a tabela local
+// Nó de leitura p/ a página (SEM pin — só nome+data):
+//   /resumo/dispositivo1 = {"total":N,"chaves":[{"nome":"..","criadaEm":E}]}
 #define COMANDO_UNICO_PATH "/comandos/dispositivo1"
+#define RESUMO_PATH "/resumo/dispositivo1"
+#define COMANDO_LIMPAR "LIMPAR"
 
-// Funções de gerenciamento do Firebase
+// Gerenciamento do Firebase
 void iniciarFirebase();
 void processarFirebase(); // Chame no loop() para manter o app vivo
 
-// Funções de NVS (via Preferences)
-void salvar_token_nvs(const String &token);
-String ler_token_nvs();
-void limpar_token_nvs();
+// true quando autenticado (stream ativo). Para o modo status.
+bool firebase_pronto();
 
 #endif
