@@ -1,5 +1,5 @@
-// Bootstrap: composição MVC (gerenciador de senhas).
-import { SenhasView } from "./views/SenhasView.js";
-import { SenhasController } from "./controllers/SenhasController.js";
+// Bootstrap: composição MVC (comandos voláteis da tranca).
+import { ComandoView } from "./views/ComandoView.js";
+import { ComandoController } from "./controllers/ComandoController.js";
 
-new SenhasController(new SenhasView());
+new ComandoController(new ComandoView());
