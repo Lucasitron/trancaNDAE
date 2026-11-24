@@ -1,18 +1,26 @@
+# ================= Credenciais =================
+# Nunca commitar. Use secrets.example.h como template.
+include/secrets.h
+secrets*.h
+!include/secrets.example.h
+.env
+.env.*
+
 # ================= PlatformIO =================
 .pio/
+.platformio/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 compile_commands.json
-firmware/include/secrets.h
 
 # ================= Node.js =================
-backend/node_modules/
-backend/.env
-backend/npm-debug.log*
+node_modules/
+npm-debug.log*
 
 # ================= SQLite =================
-backend/config/database/*.sqlite-journal
-backend/config/database/*.sqlite-wal
+**/*.sqlite
+**/*.sqlite-journal
+**/*.sqlite-wal
 
 # ================= Sistema =================
 .DS_Store
