@@ -15,8 +15,23 @@
 #include "menu_status.h"
 
 // Buffer do PIN (apenas dígitos; valida SOMENTE com '#').
-static String pinDigitado = "";
-static const int PIN_MAX_LENGTH = 16;
+static String pinDigitado;
+static const unsigned int PIN_MAX_LENGTH = 16;
+
+// Serviços que dependem de rede (OTA, telnet, Firebase). Sobe UMA vez —
+// no boot com Wi-Fi ou quando o Wi-Fi conectar depois (retry/fallback).
+static bool servicosOnline = false;
+
+static void ativarServicosOnline()
+{
+    if (servicosOnline || !wifiConectado)
+        return;
+    servicosOnline = true;
+    iniciarOTA();
+    telnet_setup(); // log remoto: telnet <IP> 23
+    iniciarFirebase();
+    mostrarNoLCD("WiFi OK", "Sistema Online", "", "Aguardando comando");
+}
 
 // ================= SETUP =================
 void setup()
@@ -24,6 +39,8 @@ void setup()
     Serial.begin(115200);
     delay(500);
     tlogln("\n=== Iniciando Fechadura ===");
+
+    pinDigitado.reserve(PIN_MAX_LENGTH); // cresce uma vez, nunca realoca
 
     senhas_init();    // chaves locais (NVS -> RAM; offline OK)
     fechadura_init(); // relé começa FECHADO
@@ -37,16 +54,9 @@ void setup()
     conectarWiFi();
 
     if (wifiConectado)
-    {
-        iniciarOTA();
-        telnet_setup(); // log remoto: telnet <IP> 23
-        iniciarFirebase();
-        mostrarNoLCD("WiFi OK", "Sistema Online", "", "Aguardando comando");
-    }
+        ativarServicosOnline();
     else
-    {
         mostrarNoLCD("WiFi OFF", "Modo offline", "", "Chaves em cache OK");
-    }
 
     telaAguardando();
 
@@ -59,11 +69,20 @@ void setup()
 // ================= LOOP =================
 void loop()
 {
+    // Wi-Fi conectou depois do boot? Sobe os serviços online agora
+    // (sem isso o Firebase nunca iniciava e o ESP ficava sem comandos).
+    if (!servicosOnline && wifiConectado)
+    {
+        ativarServicosOnline();
+        telaAguardando();
+    }
+
     // Serviços (não-bloqueantes)
     processarOTA();
     processarFirebase();
     telnet_loop();
     fechadura_loop(); // auto-fechamento por timeout
+    display_loop();   // reescrita periódica: recupera LCD em branco
 
     // Mudança na tabela -> atualiza espera (fora de porta aberta/status)
     static unsigned long ultimoCheck = 0;
@@ -133,9 +152,9 @@ void loop()
     }
 
     // Dígito: acumula e exibe SÓ máscara (PIN nunca em claro).
-    if (pinDigitado.length() < (unsigned)PIN_MAX_LENGTH)
+    if (pinDigitado.length() < PIN_MAX_LENGTH)
     {
         pinDigitado += tecla;
-        display_set_teclado(mascarar(pinDigitado));
+        display_set_mascara(pinDigitado.length());
     }
 }

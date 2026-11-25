@@ -27,7 +27,7 @@
 void iniciarFirebase();
 void processarFirebase(); // Chame no loop() para manter o app vivo
 
-// true quando autenticado (porta de entrada do modo status).
+// true quando o app foi iniciado e está pronto (porta de entrada do modo status).
 bool firebase_pronto();
 
 // Força recriação do stream na próxima volta (após queda/reconexão Wi-Fi).

@@ -1,43 +1,37 @@
 // telnet_log.cpp — Servidor telnet mínimo (1 cliente) + log dual.
+// Sem alocação de String por chamada: literais/formatos vão direto para
+// Serial e WiFiClient, que aceitam const char*.
+#include "secrets.h" // TELNET_PORT
 #include "telnet_log.h"
 #include <WiFi.h>
+#include <ctype.h>
 #include <stdarg.h>
+#include <string.h>
 
 static WiFiServer telnetServer(TELNET_PORT);
 static WiFiClient telnetClient;
-static String telnetLinha; // buffer do comando digitado
+
+// Buffer do comando digitado (fixo: até 64 chars, sem heap).
+static char telnetLinha[65];
+static uint8_t telnetLen = 0;
 
 bool telnet_conectado()
 {
     return telnetClient && telnetClient.connected();
 }
 
-// Envia para o telnet somente (sem Serial).
-static void telnet_only(const String &s)
-{
-    if (telnet_conectado())
-        telnetClient.print(s);
-}
-
-static void telnet_only_f(const char *fmt, va_list ap)
-{
-    if (!telnet_conectado())
-        return;
-    char buf[256];
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    telnetClient.print(buf);
-}
-
 void tlog_raw(const String &s)
 {
     Serial.print(s);
-    telnet_only(s);
+    if (telnet_conectado())
+        telnetClient.print(s);
 }
 
 void tlog_raw(const char *s)
 {
     Serial.print(s);
-    telnet_only(String(s));
+    if (telnet_conectado())
+        telnetClient.print(s);
 }
 
 void tlog(const String &s)
@@ -45,7 +39,19 @@ void tlog(const String &s)
     tlog_raw(s);
 }
 
+void tlog(const char *s)
+{
+    tlog_raw(s);
+}
+
 void tlogln(const String &s)
+{
+    Serial.println(s);
+    if (telnet_conectado())
+        telnetClient.println(s);
+}
+
+void tlogln(const char *s)
 {
     Serial.println(s);
     if (telnet_conectado())
@@ -60,7 +66,8 @@ void tlogf(const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     Serial.print(buf);
-    telnet_only(String(buf));
+    if (telnet_conectado())
+        telnetClient.print(buf);
 }
 
 static void telnet_banner()
@@ -69,39 +76,6 @@ static void telnet_banner()
     telnetClient.println("=== ESP32 trancaNDAE — log remoto ===");
     telnetClient.println("Comandos: help | status | reboot");
     telnetClient.println("------------------------------------");
-}
-
-static void telnet_status();
-
-static void telnet_exec(const String &cmd)
-{
-    String c = cmd;
-    c.trim();
-    c.toLowerCase();
-    if (c.length() == 0)
-        return;
-    if (c == "help" || c == "?")
-    {
-        telnetClient.println("Comandos:");
-        telnetClient.println("  status - IP, uptime, heap, RSSI, WiFi");
-        telnetClient.println("  reboot - reinicia o ESP32");
-        telnetClient.println("  help   - esta ajuda");
-    }
-    else if (c == "status")
-    {
-        telnet_status();
-    }
-    else if (c == "reboot")
-    {
-        telnetClient.println("Reiniciando...");
-        delay(300);
-        ESP.restart();
-    }
-    else
-    {
-        telnetClient.print("Comando desconhecido: ");
-        telnetClient.println(cmd);
-    }
 }
 
 // Status sem puxar firebase_client.h (evita dependência circular).
@@ -122,11 +96,58 @@ static void telnet_status()
     telnetClient.println(TELNET_PORT);
 }
 
+// Compara o comando já normalizado (minúsculo, sem espaços nas pontas).
+static void telnet_exec(const char *cmd)
+{
+    char c[sizeof(telnetLinha)];
+    size_t ini = 0, fim = strlen(cmd);
+    while (ini < fim && isspace((unsigned char)cmd[ini]))
+        ini++;
+    while (fim > ini && isspace((unsigned char)cmd[fim - 1]))
+        fim--;
+
+    size_t n = 0;
+    for (size_t i = ini; i < fim && n < sizeof(c) - 1; i++)
+        c[n++] = (char)tolower((unsigned char)cmd[i]);
+    c[n] = '\0';
+    if (n == 0)
+        return;
+
+    if (!strcmp(c, "help") || !strcmp(c, "?"))
+    {
+        telnetClient.println("Comandos:");
+        telnetClient.println("  status - IP, uptime, heap, RSSI, WiFi");
+        telnetClient.println("  reboot - reinicia o ESP32");
+        telnetClient.println("  help   - esta ajuda");
+    }
+    else if (!strcmp(c, "status"))
+    {
+        telnet_status();
+    }
+    else if (!strcmp(c, "reboot"))
+    {
+        telnetClient.println("Reiniciando...");
+        delay(300);
+        ESP.restart();
+    }
+    else
+    {
+        telnetClient.print("Comando desconhecido: ");
+        telnetClient.println(cmd);
+    }
+}
+
+static void telnet_limpar_linha()
+{
+    telnetLen = 0;
+    telnetLinha[0] = '\0';
+}
+
 void telnet_setup()
 {
     telnetServer.begin();
     telnetServer.setNoDelay(true);
-    Serial.print("📡 Telnet pronto na porta ");
+    Serial.print("Telnet pronto na porta ");
     Serial.print(TELNET_PORT);
     Serial.print(" (");
     Serial.print(WiFi.localIP());
@@ -150,24 +171,24 @@ void telnet_loop()
         else
         {
             telnetClient = novo;
-            telnetLinha = "";
+            telnet_limpar_linha();
             telnet_banner();
-            // Avisa no USB também.
-            Serial.println("📡 Cliente telnet conectado.");
+            Serial.println("Cliente telnet conectado.");
         }
     }
 
     if (!telnet_conectado())
-        return;
-
-    if (!telnetClient.connected())
     {
-        telnetClient.stop();
-        Serial.println("📡 Cliente telnet desconectado.");
+        if (telnetClient) // socket morreu: libera o slot e o buffer
+        {
+            telnetClient.stop();
+            telnet_limpar_linha();
+            Serial.println("Cliente telnet desconectado.");
+        }
         return;
     }
 
-    // Lê comandos (linha a linha, eco simples).
+    // Lê comandos (linha a linha).
     while (telnetClient.available())
     {
         char ch = (char)telnetClient.read();
@@ -176,16 +197,17 @@ void telnet_loop()
         if (ch == '\n')
         {
             telnet_exec(telnetLinha);
-            telnetLinha = "";
+            telnet_limpar_linha();
         }
         else if (ch == 0x08 || ch == 0x7F) // backspace
         {
-            if (telnetLinha.length() > 0)
-                telnetLinha.remove(telnetLinha.length() - 1);
+            if (telnetLen > 0)
+                telnetLinha[--telnetLen] = '\0';
         }
-        else if (telnetLinha.length() < 64 && ch >= 32 && ch < 127)
+        else if (telnetLen < sizeof(telnetLinha) - 1 && ch >= 32 && ch < 127)
         {
-            telnetLinha += ch;
+            telnetLinha[telnetLen++] = ch;
+            telnetLinha[telnetLen] = '\0';
         }
     }
 }

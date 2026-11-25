@@ -27,7 +27,9 @@ void telnet_loop();
 void tlog_raw(const String &s);
 void tlog_raw(const char *s);
 void tlog(const String &s);
+void tlog(const char *s);
 void tlogln(const String &s = "");
+void tlogln(const char *s);
 void tlogf(const char *fmt, ...);
 
 // true se há um cliente telnet conectado agora.

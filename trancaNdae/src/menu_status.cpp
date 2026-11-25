@@ -26,6 +26,12 @@ bool emModoStatus()
     return modoStatus;
 }
 
+// A tela "Sistema" (3) usa 6 linhas; as demais usam 4.
+static uint8_t linhasDaTela(uint8_t tela)
+{
+    return (tela == 3) ? 6 : 4;
+}
+
 // Monta as linhas da tela (máx. 6; telas curtas usam 4).
 static void linhasStatus(uint8_t tela, String out[6], uint8_t &nLinhas)
 {
@@ -74,13 +80,15 @@ static void desenharStatus()
     String linhas[6];
     uint8_t n = 4;
     linhasStatus(telaStatus, linhas, n);
-    if (scrollStatus + 4 > n)
-        scrollStatus = (n > 4) ? n - 4 : 0;
-    String rodape = (n > 4) ? "2/8 rola 4/6 tela *=sai" : "*=sai 4/6=tela";
-    display_mostrar4(linhas[scrollStatus + 0],
-                     (n > (scrollStatus + 1)) ? linhas[scrollStatus + 1] : "",
-                     (n > (scrollStatus + 2)) ? linhas[scrollStatus + 2] : "",
-                     rodape);
+    uint8_t maxScroll = (n > 4) ? n - 4 : 0;
+    if (scrollStatus > maxScroll)
+        scrollStatus = maxScroll;
+
+    const char *rodape = (maxScroll > 0) ? "2/8 rola 4/6 tela *=sai" : "*=sai 4/6=tela";
+    mostrarNoLCD(linhas[scrollStatus + 0],
+                 (n > (scrollStatus + 1)) ? linhas[scrollStatus + 1] : "",
+                 (n > (scrollStatus + 2)) ? linhas[scrollStatus + 2] : "",
+                 rodape);
 }
 
 void entrarStatus()
@@ -101,10 +109,8 @@ void sairStatus()
 
 bool processarTeclaStatus(char tecla)
 {
-    String linhas[6];
-    uint8_t n = 4;
-    linhasStatus(telaStatus, linhas, n);
-    uint8_t maxScroll = (n > 4) ? n - 4 : 0;
+    const uint8_t n = linhasDaTela(telaStatus);
+    const uint8_t maxScroll = (n > 4) ? n - 4 : 0;
 
     switch (tecla)
     {
