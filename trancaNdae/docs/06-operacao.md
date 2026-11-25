@@ -26,9 +26,10 @@ Telas: **Wi-Fi** (rede, IP, RSSI), **Firebase** (rede/auth/stream),
 ## Cadastrar chaves (página web, sem login)
 
 A página não usa login; os nós `comandos`/`pessoas` estão com Rules
-públicas (`true`) para funcionar sem configuração. **Risco:** quem tiver
-a URL controla a tranca — hospede a página em local restrito ou volte o
-login + Rules por UID/`auth != null`.
+públicas (`true`) para funcionar sem configuração. Por isso o ESP32 também
+opera **sem login** (`NoAuth`). **Risco:** quem tiver a URL controla a tranca
+— hospede a página em local restrito ou volte o login + Rules por
+UID/`auth != null` (no ESP, ligue `FIREBASE_USE_USER_AUTH`).
 
 1. Dispositivo + **nome** (etiqueta única) + PIN de 4 dígitos + validade.
 2. Ao enviar, a página grava os **metadados no Firebase**
@@ -42,6 +43,18 @@ login + Rules por UID/`auth != null`.
 
 Nada de senha fica no database: o ESP apaga o comando após consumir.
 Sem Wi-Fi, a tranca opera com as chaves em cache (NVS).
+
+## Robustez e memória
+
+- Heap: a tabela de chaves, o buffer do PIN e o display usam **RAM
+  estática** (sem `new`/`malloc`). Veja `docs/14-memoria.md`.
+- **Display apagou ao abrir a porta?** Era o pico do relé zerando o
+  controlador do LCD. `display_loop()` reescreve a tela a cada 1 s e
+  reinicializa o módulo I2C se ele parar de responder — a imagem volta
+  sozinha, sem reiniciar o ESP. Se persistir, verifique a alimentação do
+  relé (fonte/5V e diodo de roda-livre).
+- Diagnóstico rápido: modo status → tela **Sistema** (uptime e heap
+  livre) ou `telnet <IP> 23` e digite `status`.
 
 ## Telnet e OTA
 

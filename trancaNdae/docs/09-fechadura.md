@@ -8,7 +8,7 @@ porta **ABERTA** (módulo ativo em LOW: inverta `RELE_ABERTO/RELE_FECHADO`).
 | Função | Descrição |
 | :--- | :--- |
 | `fechadura_init()` | Relé como saída, começa **FECHADO** |
-| `abrirPorta()` | Energiza, arma auto-fechamento (`TEMPO_PORTA_ABERTA_MS` = 5s) |
+| `abrirPorta()` | Energiza, arma auto-fechamento (`TEMPO_PORTA_ABERTA_MS` = 500 ms) |
 | `fecharPorta()` | Trava na hora (+ restaura espera fora do modo status) |
 | `fechadura_aberta()` | Estado (teclado pausa com porta aberta) |
 | `fechadura_loop()` | Fecha sozinha no timeout — chame todo `loop()` |

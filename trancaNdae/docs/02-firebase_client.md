@@ -7,15 +7,23 @@ apenas comandos que o ESP **consome e apaga**.
 ## API
 
 ### `void iniciarFirebase()`
-Autenticação (`UserAuth`), app e preparo do stream. O stream inicia em
-`processarFirebase()` quando `app.ready()`.
+App e preparo do stream (idempotente). Por padrão usa **`NoAuth`** (as Rules
+são públicas), então `app.ready()` fica `true` de imediato e o stream não
+depende de login. O stream inicia em `processarFirebase()` quando
+`app.ready()`. Para Rules com `auth != null`, defina `FIREBASE_USE_USER_AUTH`
+em `firebase_client.cpp` e preencha `USER_EMAIL`/`USER_PASSWORD`.
+
+> **Importante:** `iniciarFirebase()` só sobe com Wi-Fi. O `main.cpp` chama os
+> serviços online (OTA/telnet/Firebase) quando `wifiConectado` fica `true`,
+> seja no boot ou numa reconexão posterior.
 
 ### `void processarFirebase()`
 Mantém o app assíncrono rodando + inicia o stream UMA vez após auth.
 Chamada **não-bloqueante** no `loop()`.
 
 ### `bool firebase_pronto()`
-`true` quando autenticado (usado pelo modo status do display).
+`true` quando o app foi iniciado e está pronto (`NoAuth` → imediato). Usado
+pelo modo status do display.
 
 ### `void processData(AsyncResult &aResult)`
 Callback unificado (eventos/debug/erros/dados). **Nunca** chama `app.loop()`
@@ -48,7 +56,7 @@ Metadados (gravados e lidos pela PÁGINA, nunca o PIN):
 O ESP **não** publica nem lê metadados: só recebe comandos e guarda os PINs.
 A expiração é aplicada pela página (bloqueia via `BLOQ` ao carregar).
 
-- `"4829"` → cadastra o PIN na tabela local (máx. 20).
+- `"4829"` → cadastra o PIN na tabela local (máx. 30).
 - `"LIMPAR"` → zera a tabela local.
 - `null`/ausente → estado normal (nó já consumido/apagado).
 
@@ -59,5 +67,9 @@ A expiração é aplicada pela página (bloqueia via `BLOQ` ao carregar).
 ## Segurança
 
 - TLS (`setInsecure()` p/ testes; certificado real em produção)
-- Auth e-mail/senha com renovação (3000s); Rules exigem `auth != null`
+- **Sem login por padrão (`NoAuth`)**, pois `database.rules.json` é público
+  (`true`) — o auth era um ponto de falha sem ganho de segurança. Ao endurecer
+  as Rules (`auth != null`), ligue `FIREBASE_USE_USER_AUTH` (renovação 3000s).
 - PINs nunca trafegam além do comando volátil (apagado após leitura)
+- Resiliência: o stream é recriado quando `app.ready()` cai ou quando o SSE
+  reporta erro; o comando é reprocessado ao voltar a conexão.

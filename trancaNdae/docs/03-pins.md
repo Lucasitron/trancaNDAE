@@ -13,14 +13,13 @@ Centraliza **todas** as definições de pinos do projeto. Fonte única de verdad
 
 | Define | GPIO | Função |
 | :--- | :--- | :--- |
-| `KEYPAD_ROW_1` | 27 | Linha R0 (teclas 1, 2, 3) |
+| `KEYPAD_ROW_1` | 33 | Linha R0 (teclas 1, 2, 3) |
 | `KEYPAD_ROW_2` | 13 | Linha R1 (teclas 4, 5, 6) |
-| `KEYPAD_ROW_3` | 32 | Linha R2 (teclas 7, 8, 9) |
-| `KEYPAD_ROW_4` | 25 | Linha R3 (teclas *, 0, #) |
-| `KEYPAD_COL_1` | 26 | Coluna C0 |
-| `KEYPAD_COL_2` | 14 | Coluna C1 |
-| `KEYPAD_COL_3` | 33 | Coluna C2 |
-| `KEYPAD_COL_4` | 32 | Coluna 4 (só Wokwi) |
+| `KEYPAD_ROW_3` | 14 | Linha R2 (teclas 7, 8, 9) |
+| `KEYPAD_ROW_4` | 26 | Linha R3 (teclas *, 0, #) |
+| `KEYPAD_COL_1` | 25 | Coluna C0 |
+| `KEYPAD_COL_2` | 32 | Coluna C1 |
+| `KEYPAD_COL_3` | 27 | Coluna C2 |
 
 ## LCD I2C
 

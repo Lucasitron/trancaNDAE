@@ -4,6 +4,9 @@ Servidor TCP na porta `TELNET_PORT` (1 cliente por vez) + escrita dupla:
 toda função `tlog*` escreve no **Serial e no Telnet** (sem cliente, custo
 zero de rede). Conecte: `telnet <IP> 23` (mesma rede do ESP).
 
+O buffer do comando é fixo (`char[65]`) e os logs escrevem `const char*`
+direto em `Serial`/`WiFiClient` — nenhuma `String` temporária por linha.
+
 ## API
 
 | Função | Descrição |

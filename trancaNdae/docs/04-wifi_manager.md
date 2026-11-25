@@ -17,6 +17,11 @@ eventos e OTA.
 Sem nenhuma rede, `wifi_reconectar()` (retry a cada 60s no `loop`, fora de
 porta aberta/status) tenta de novo e rearma o OTA.
 
+Quando o Wi-Fi conecta (no boot ou num retry posterior), o `main.cpp` sobe os
+**serviços online uma única vez** (OTA + telnet + Firebase) via
+`ativarServicosOnline()`. Antes, se o ESP subisse offline, o Firebase nunca era
+iniciado e o ESP ficava sem receber comandos.
+
 ## API
 
 | Função | Descrição |

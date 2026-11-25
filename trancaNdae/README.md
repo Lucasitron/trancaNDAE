@@ -24,12 +24,12 @@ localmente e **apaga o nó** — nada de senha permanece na nuvem. A abertura é
 
 ### ✨ Funcionalidades
 
-- 🔐 **Senhas só no ESP** (tabela local 20 PINs, sobrevive a reboot)
-- ⌨️ **Abertura somente com `#`** + auto-fechamento em 5s (não-bloqueante)
+- 🔐 **Senhas só no ESP** (tabela local de 30 PINs, sobrevive a reboot)
+- ⌨️ **Abertura somente com `#`** + auto-fechamento em 500 ms (não-bloqueante)
 - 🖥️ **Modo status no display** (senha de admin + `*`, navegação 2/8/4/6)
 - 📡 **Wi-Fi com DHCP** + Telnet de logs (porta 23) + **OTA** sem cabo
 - 🔥 **Firebase RTDB assíncrono** (stream consome-e-apaga comandos)
-- 🖥️ **LCD 20x4 I2C** com auto-detecção e anti-spam de escritas
+- 🖥️ **LCD 20x4 I2C** com auto-detecção, anti-spam e recuperação automática
 - 🧪 **Modo simulação Wokwi** isolado em módulo próprio
 
 ---
@@ -53,7 +53,7 @@ localmente e **apaga o nó** — nada de senha permanece na nuvem. A abertura é
 1. A página envia PIN (ou `LIMPAR`) em `comandos/{dispositivo}`
 2. ESP32 recebe via streaming, cadastra/zera a tabela local e **apaga o nó**
 3. Usuário digita o PIN no teclado + `#`
-4. Se válido: relé abre por 5s e fecha sozinho
+4. Se válido: relé abre por 500 ms e fecha sozinho
 
 ---
 
@@ -76,7 +76,7 @@ tranca-esp32/
 ├── src/                       # (mesmos nomes, .cpp)
 │   └── main.cpp               # Só orquestração (setup/loop + despacho)
 ├── web/                       # Sem login: envio volátil + metadados (docs/13-web.md)
-├── docs/                      # 01-simulation … 13-web
+├── docs/                      # 01-simulation … 14-memoria
 ├── platformio.ini
 └── README.md
 ```
@@ -90,9 +90,8 @@ tranca-esp32/
 | **Relé** | GPIO 4 | Via transistor 2N2222A + diodo 1N4007 |
 | **Buzzer** | — | Removido |
 | **LCD 20x4 I2C** | GPIO 21 (SDA), 22 (SCL) | Endereço `0x27` |
-| **Teclado R0-R3** | GPIO 27, 13, 32, 25 | Linhas |
-| **Teclado C0-C2** | GPIO 26, 14, 33 | Colunas (3x4 real) |
-| **Teclado C4** | GPIO 32 | Só no Wokwi (4x4) |
+| **Teclado R0-R3** | GPIO 33, 13, 14, 26 | Linhas |
+| **Teclado C0-C2** | GPIO 25, 32, 27 | Colunas (3x4 real) |
 | **Alimentação** | LM7805 → 5V | VIN do ESP32 |
 
 ---

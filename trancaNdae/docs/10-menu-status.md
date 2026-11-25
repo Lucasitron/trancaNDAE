@@ -17,7 +17,7 @@ Demais teclas são ignoradas.
 
 1. **Wi-Fi**: rede, IP, RSSI.
 2. **Firebase**: rede conectada/offline, auth OK/pendente.
-3. **Chaves**: `Ativas: N/20`, abertura só com `#`, último evento.
+3. **Chaves**: `Ativas: N/30`, abertura só com `#`, último evento.
 4. **Sistema** (rolável, 6 linhas): uptime, heap, relé, lembretes
    (`Reinicia: 0000+*`, `Status: admin + *`).
 
