@@ -14,6 +14,14 @@
 **/compile_commands.json
 **/.vscode/c_cpp_properties.json
 **/.vscode/launch.json
+**/.vscode/settings.json
+
+# ================= Fabricação (gerados pelo CAD) =================
+# Gerbers/arquivos de produção: regenere a partir do projeto da placa.
+**/Gerber_*/
+**/PCB_*/
+**/Gerber_*.zip
+**/PCB_*.zip
 
 # ================= Bancos locais e caches =================
 **/*.sqlite
