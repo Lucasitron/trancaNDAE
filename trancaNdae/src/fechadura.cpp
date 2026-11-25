@@ -18,20 +18,22 @@ void fechadura_init()
 
 void abrirPorta()
 {
+    // Desenha ANTES de energizar o relé: evita tráfego I2C durante a EMI
+    // do chaveamento (que pode corromper comandos do LCD).
+    mostrarNoLCD("PORTA ABERTA", "Empurre a porta", "", "Fechando sozinha...");
     digitalWrite(PINO_RELE, RELE_ABERTO);
     portaAberta = true;
     momentoAbertura = millis();
-    mostrarNoLCD("PORTA ABERTA", "Empurre a porta", "", "Fechando sozinha...");
     registrarEvento("Porta ABERTA pelo teclado.");
 }
 
 void fecharPorta()
 {
+    if (!emModoStatus())
+        telaAguardando(); // idem: desenha antes do pulso de fechamento
     digitalWrite(PINO_RELE, RELE_FECHADO);
     portaAberta = false;
     registrarEvento("Porta FECHADA (timeout).");
-    if (!emModoStatus())
-        telaAguardando();
 }
 
 bool fechadura_aberta()
@@ -45,10 +47,10 @@ void fechadura_loop()
         fecharPorta();
 }
 
-void validarChave(const String &chave)
+void validarChave(const String &codigo)
 {
-    String codigo = chave;
-    codigo.trim();
+    // O buffer do teclado só acumula dígitos (nunca espaços), então não há
+    // nada a aparar: evita a cópia/String temporária por validação.
 
     // O código de reinício e a senha de admin NUNCA abrem a porta.
     if (codigo == ADMIN_PASSWORD || codigo == CODIGO_RESET)

@@ -1,5 +1,7 @@
 // display.h — LCD 20x4 I2C (layout em 4 zonas) com auto-detecção.
-// Só escreve no barramento quando o conteúdo muda (anti-spam I2C).
+// Só escreve no barramento as linhas que mudaram (anti-spam I2C), mas
+// reescreve tudo periodicamente para recuperar o controlador do LCD caso
+// ele perca o estado (ex.: queda de alimentação no acionamento do relé).
 // Sem display físico, o conteúdo (sem segredos) é espelhado no log.
 #ifndef DISPLAY_H
 #define DISPLAY_H
@@ -16,22 +18,19 @@ bool display_ok();
 // Wire + scan + init/backlight. Chame no setup().
 bool display_init();
 
+// Vigia o LCD: reescreve as 4 linhas periodicamente e reinicializa o
+// controlador se o endereço I2C parar de responder. Chame todo loop().
+void display_loop();
+
 // Zonas: status | mensagem | teclado (máscara!) | rodapé.
 void mostrarNoLCD(const String &status, const String &mensagem,
                   const String &teclado = "", const String &rodape = "");
 
-// Escreve 4 linhas cruas (para menus). Sem formatação.
-void display_mostrar4(const String &l0, const String &l1,
-                      const String &l2, const String &l3);
-
 // Tela padrão de espera (mostra nº de chaves ativas, sem PINs).
 void telaAguardando();
 
-// Máscara anti-vazamento: "1234" -> "****". PIN nunca em claro no display.
-String mascarar(const String &s);
-
-// Atualiza só a zona do teclado com a máscara já pronta.
-void display_set_teclado(const String &mascara);
+// Zona do teclado com N asteriscos (PIN nunca em claro, sem alocar String).
+void display_set_mascara(unsigned int n);
 
 // Limpa a zona do teclado.
 void display_limpar_teclado();

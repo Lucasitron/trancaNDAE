@@ -10,7 +10,7 @@
 #define RELE_ABERTO HIGH
 
 // Fecha sozinha após este tempo (verificação não-bloqueante via millis).
-#define TEMPO_PORTA_ABERTA_MS 5000
+#define TEMPO_PORTA_ABERTA_MS 500
 
 // Digite + '*' = REINICIA o ESP (só reboot; as chaves NÃO são apagadas).
 // NUNCA cadastre "0000" como chave de abertura.
