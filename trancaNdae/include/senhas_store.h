@@ -6,15 +6,16 @@
 // O PIN NUNCA sai do ESP.
 //
 // - Capacidade fixa em RAM estática, sem alocação dinâmica.
+// - PIN guardado como uint16 (0..9999): 2 bytes, em vez de 5 ("1234\0").
+// - NVS: um único blob "regs" no namespace "senhas" (uma entrada, não três
+//   por chave). O formato antigo (t00/n00/a00) é migrado no boot.
 // - Revogar = BLOQ/DEL/LIMPAR. Sem blocklist que cresce.
-// - NVS espelha a RAM ("n", "t%02d", "n%02d", "a%02d").
 #ifndef SENHAS_STORE_H
 #define SENHAS_STORE_H
 
 #include <Arduino.h>
 
-#define MAX_SENHAS 20
-#define TOKEN_HEX_LEN 4 // tamanho do slot (= PIN_LEN dígitos)
+#define MAX_SENHAS 30
 #define PIN_LEN 4
 #define NOME_MAX_LEN 24
 
